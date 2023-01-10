@@ -6,13 +6,16 @@ use alloc::borrow::Borrow;
 use alloc::vec::Vec;
 
 use core::iter;
-use curve25519_dalek::ristretto::{CompressedRistretto, RistrettoPoint};
-use curve25519_dalek::scalar::Scalar;
-use curve25519_dalek::traits::VartimeMultiscalarMul;
+use curve25519_dalek_ng::ristretto::{CompressedRistretto, RistrettoPoint};
+use curve25519_dalek_ng::scalar::Scalar;
+use curve25519_dalek_ng::traits::VartimeMultiscalarMul;
 use merlin::Transcript;
 
-use crate::errors::ProofError;
-use crate::transcript::TranscriptProtocol;
+mod errors;
+mod transcript;
+
+pub use crate::errors::ProofError;
+pub use crate::transcript::TranscriptProtocol;
 
 #[derive(Clone, Debug)]
 pub struct PermutationProof {
@@ -35,5 +38,14 @@ impl PermutationProof {
         mut a_vec: Vec<Scalar>,
         mut b_vec: Vec<Scalar>,
     ) -> PermutationProof {
+        let mut L_vec = Vec::with_capacity(5);
+        let mut R_vec = Vec::with_capacity(5);
+
+        PermutationProof{
+            L_vec: L_vec,
+            R_vec: R_vec,
+            a: a_vec[0],
+            b: b_vec[0],
+        }
     }
 }
