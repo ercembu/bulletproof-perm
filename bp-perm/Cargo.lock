@@ -25,6 +25,7 @@ dependencies = [
  "bulletproofs",
  "curve25519-dalek-ng",
  "merlin",
+ "rand",
 ]
 
 [[package]]

@@ -9,4 +9,5 @@ edition = "2018"
 bulletproofs = {version = "4.0.0" }
 merlin = {version="^3" }
 curve25519-dalek-ng = {version = "^4"}
+rand = {version = "*"}
 
