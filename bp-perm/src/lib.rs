@@ -24,23 +24,60 @@ impl ArithmeticCircuitProof {
     /// Create Permutation Proof Based on Mr. Ke's arithmetic circuits
 
     pub fn create(
-        G: &RistrettoPoint,
-        H: &RistrettoPoint,
+        transcript: &mut Transcript,
+        g: &RistrettoPoint,
+        h: &RistrettoPoint,
         mut G_vec: Vec<RistrettoPoint>,
         mut H_vec: Vec<RistrettoPoint>,
         mut W_L: Vec<Vec<Scalar>>,
         mut W_R: Vec<Vec<Scalar>>,
         mut W_O: Vec<Vec<Scalar>>,
         mut W_V: Vec<Vec<Scalar>>,
-        mut c: Vec<Scalar>,
-        mut a_L: Vec<Scalar>,
-        mut a_R: Vec<Scalar>,
-        mut a_O: Vec<Scalar>,
+        mut c_vec: Vec<Scalar>,
+        mut a_L_vec: Vec<Scalar>,
+        mut a_R_vec: Vec<Scalar>,
+        mut a_O_vec: Vec<Scalar>,
         mut gamma: Vec<Scalar>
 
     ) -> ArithmeticCircuitProof {
-        let mut rng = rand::thread_rng();
+        /// temporary resolution while debugging
         let mut L_vec = Vec::with_capacity(5);
+
+        let mut G = &mut G_vec[..];
+        let mut H = &mut H_vec[..];
+        let mut c = &mut c_vec[..];
+        let mut a_L = &mut a_L_vec[..];
+        let mut a_R = &mut a_R_vec[..];
+        let mut a_O = &mut a_O_vec[..];
+
+        let mut n = G.len();
+
+        assert_eq!(H.len(), n);
+        assert_eq!(W_L[0].len(), n);
+        assert_eq!(W_R[0].len(), n);
+        assert_eq!(W_O[0].len(), n);
+        assert_eq!(a_L.len(), n);
+        assert_eq!(a_R.len(), n);
+        assert_eq!(a_O.len(), n);
+
+        let mut m = gamma.len();
+
+        assert_eq!(W_V[0].len(), m);
+
+        let Q = W_L.len();
+
+        assert_eq!(W_R.len(), Q);
+        assert_eq!(W_L.len(), Q);
+        assert_eq!(W_O.len(), Q);
+        assert_eq!(W_V.len(), Q);
+
+        let mut rng = rand::thread_rng();
+
+        let alpha = Scalar::random(&mut rng);
+        let beta = Scalar::random(&mut rng);
+        let ro = Scalar::random(&mut rng);
+
+        let A_I = h.checked_pow(alpha);
 
         ArithmeticCircuitProof{
             L_vec: L_vec,
