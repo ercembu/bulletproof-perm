@@ -25,8 +25,8 @@ impl ArithmeticCircuitProof {
 
     pub fn create(
         transcript: &mut Transcript,
-        g: &RistrettoPoint,
-        h: &RistrettoPoint,
+        G_factors: &[Scalar],
+        H_factors: &[Scalar],
         mut G_vec: Vec<RistrettoPoint>,
         mut H_vec: Vec<RistrettoPoint>,
         mut W_L: Vec<Vec<Scalar>>,
@@ -77,7 +77,17 @@ impl ArithmeticCircuitProof {
         let beta = Scalar::random(&mut rng);
         let ro = Scalar::random(&mut rng);
 
-        let A_I = h.checked_pow(alpha);
+        let A_I = RistrettoPoint::vartime_multiscalar_mul(
+            a_L.iter()
+                .zip(G_factors[n..2 * n].into_iter())
+                .map(|(a_L_i, g)| a_L_i * g)
+                .chain(
+                    a_R.iter()
+                    .zip(H_factors[0..n].into_iter())
+                    .map(|(a_R_i, h)| a_R_i * h),
+                )
+                
+        )
 
         ArithmeticCircuitProof{
             L_vec: L_vec,
