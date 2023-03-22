@@ -8,10 +8,10 @@ use alloc::vec::Vec;
 use core::iter;
 use curve25519_dalek_ng::ristretto::{CompressedRistretto, RistrettoPoint};
 use curve25519_dalek_ng::scalar::Scalar;
-use curve25519_dalek_ng::traits::VartimeMultiscalarMul;
+use curve25519_dalek_ng::traits::{VartimeMultiscalarMul, MultiscalarMul};
 use merlin::Transcript;
 use rand::prelude::*;
-use bulletproofs::BulletproofGens;
+use bulletproofs::{BulletproofGens, BulletproofGensShare, PedersenGens};
 use bulletproofs::ProofError;
 
 
@@ -78,19 +78,49 @@ impl ArithmeticCircuitProof {
         let ro = Scalar::random(&mut rng);
 
         let A_I = RistrettoPoint::vartime_multiscalar_mul(
-            a_L.iter()
-                .zip(G_factors[n..2 * n].into_iter())
-                .map(|(a_L_i, g)| a_L_i * g)
-                .chain(
-                    a_R.iter()
-                    .zip(H_factors[0..n].into_iter())
-                    .map(|(a_R_i, h)| a_R_i * h),
-                )
-                
-        )
+                                        iter::once(alpha)
+                                            .chain(a_L_vec.into_iter())
+                                            .chain(a_R_vec.into_iter()),
+                                        iter::once(h)
+                                            .chain(G_vec.iter())
+                                            .chain(H_vec.iter())
+        );
 
         ArithmeticCircuitProof{
             L_vec: L_vec,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    fn test_first(n: usize, m: usize) {
+        let mut rng = rand::thread_rng();
+
+        let bp_gens = BulletproofGens::new(n,1);
+        let Q = n / 2;
+
+        let G: Vec<RistrettoPoint> = (0..n).map(|_| RistrettoPoint::random(&mut rng)).collect();
+        let H: Vec<RistrettoPoint> = (0..n).map(|_| RistrettoPoint::random(&mut rng)).collect();
+
+        let pedersen_gens = PedersenGens::default();
+        let g = pedersen_gens.B;
+        let h = pedersen_gens.B_blinding;
+
+        let w_r: Vec<Vec<Scalar>> = vec![vec![Scalar(1); Q]; n];
+        let w_l: Vec<Vec<Scalar>> = vec![vec![Scalar(1); Q]; n];
+        let w_o: Vec<Vec<Scalar>> = vec![vec![Scalar(1); Q]; n];
+
+        let w_v: Vec<Vec<Scalar>> = vec![vec![Scalar(1); Q]; m];
+
+        let c: Vec<Scalar> = vec![Scalar(1); Q];
+
+        let a_l: Vec<Scalar> = vec![Scalar(1); n];
+        let a_r: Vec<Scalar> = vec![Scalar(1); n];
+        let a_o: Vec<Scalar> = vec![Scalar(1); n];
+
+        let gamma: Vec<Scalar> = vec![Scalar(1); m];
     }
 }
