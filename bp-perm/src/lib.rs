@@ -25,8 +25,10 @@ impl ArithmeticCircuitProof {
 
     pub fn create(
         transcript: &mut Transcript,
-        G_factors: &[Scalar],
-        H_factors: &[Scalar],
+        g: RistrettoPoint,
+        h: RistrettoPoint,
+        G_factors: &Vec<Scalar>,
+        H_factors: &Vec<Scalar>,
         mut G_vec: Vec<RistrettoPoint>,
         mut H_vec: Vec<RistrettoPoint>,
         mut W_L: Vec<Vec<Scalar>>,
@@ -72,19 +74,57 @@ impl ArithmeticCircuitProof {
         assert_eq!(W_V.len(), Q);
 
         let mut rng = rand::thread_rng();
+        let mut rng_2 = rand::thread_rng();
 
         let alpha = Scalar::random(&mut rng);
         let beta = Scalar::random(&mut rng);
         let ro = Scalar::random(&mut rng);
 
+
         let A_I = RistrettoPoint::vartime_multiscalar_mul(
-                                        iter::once(alpha)
-                                            .chain(a_L_vec.into_iter())
-                                            .chain(a_R_vec.into_iter()),
-                                        iter::once(h)
-                                            .chain(G_vec.iter())
-                                            .chain(H_vec.iter())
+            iter::once(alpha)
+                .chain(a_L_vec.into_iter()
+                                .zip(G_factors.into_iter())
+                                .map(|(a_L_i, g)| a_L_i * g)
+                )
+                .chain(a_R_vec.into_iter()
+                                .zip(H_factors.into_iter())
+                                .map(|(a_R_i, h)| a_R_i * h)
+                ),
+            iter::once(h) 
+                .chain(G.into_iter().map(|g| *g))
+                .chain(H.into_iter().map(|h| *h))
         );
+
+        let A_O = RistrettoPoint::vartime_multiscalar_mul(
+            iter::once(beta)
+                .chain(a_O_vec.into_iter()
+                                .zip(G_factors.into_iter())
+                                .map(|(a_O_i, g)| a_O_i * g)
+                ),
+            iter::once(h)
+                .chain(G.into_iter().map(|g| *g))
+        );
+
+        let s_l = (0..n).map(|_| Scalar::random(&mut rng));
+        let s_r = (0..n).map(|_| Scalar::random(&mut rng_2));
+
+        let S = RistrettoPoint::vartime_multiscalar_mul(
+            iter::once(ro)
+                .chain(s_l.into_iter()
+                            .zip(G_factors.into_iter())
+                            .map(|(s_l_i, g)| s_l_i * g)
+                )
+                .chain(s_r.into_iter()
+                            .zip(H_factors.into_iter())
+                            .map(|(s_r_i, h)| s_r_i * h)
+                ),
+            iter::once(h)
+                .chain(G.into_iter().map(|g| *g))
+                .chain(H.into_iter().map(|h| *h))
+        );
+                
+                                
 
         ArithmeticCircuitProof{
             L_vec: L_vec,
@@ -102,25 +142,50 @@ mod tests {
         let bp_gens = BulletproofGens::new(n,1);
         let Q = n / 2;
 
-        let G: Vec<RistrettoPoint> = (0..n).map(|_| RistrettoPoint::random(&mut rng)).collect();
-        let H: Vec<RistrettoPoint> = (0..n).map(|_| RistrettoPoint::random(&mut rng)).collect();
+        let mut trans = Transcript::new(b"test");
+
+        let G_factors: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
+        let H_factors: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
+
+        let mut G: Vec<RistrettoPoint> = (0..n).map(|_| RistrettoPoint::random(&mut rng)).collect();
+        let mut H: Vec<RistrettoPoint> = (0..n).map(|_| RistrettoPoint::random(&mut rng)).collect();
 
         let pedersen_gens = PedersenGens::default();
         let g = pedersen_gens.B;
         let h = pedersen_gens.B_blinding;
 
-        let w_r: Vec<Vec<Scalar>> = vec![vec![Scalar(1); Q]; n];
-        let w_l: Vec<Vec<Scalar>> = vec![vec![Scalar(1); Q]; n];
-        let w_o: Vec<Vec<Scalar>> = vec![vec![Scalar(1); Q]; n];
+        let w_r: Vec<Vec<Scalar>> = (0..n).map(|_| (0..Q).map(|_| Scalar::random(&mut rng)).collect()).collect();
+        let w_l: Vec<Vec<Scalar>> = (0..n).map(|_| (0..Q).map(|_| Scalar::random(&mut rng)).collect()).collect();
+        let w_o: Vec<Vec<Scalar>> = (0..n).map(|_| (0..Q).map(|_| Scalar::random(&mut rng)).collect()).collect();
 
-        let w_v: Vec<Vec<Scalar>> = vec![vec![Scalar(1); Q]; m];
+        let w_v: Vec<Vec<Scalar>> = (0..m).map(|_| (0..Q).map(|_| Scalar::random(&mut rng)).collect()).collect();
 
-        let c: Vec<Scalar> = vec![Scalar(1); Q];
+        let c: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
 
-        let a_l: Vec<Scalar> = vec![Scalar(1); n];
-        let a_r: Vec<Scalar> = vec![Scalar(1); n];
-        let a_o: Vec<Scalar> = vec![Scalar(1); n];
+        let a_l: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
+        let a_r: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
+        let a_o: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
 
-        let gamma: Vec<Scalar> = vec![Scalar(1); m];
+        let gamma: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
+
+        let proof = ArithmeticCircuitProof::create(
+                                                &mut trans,
+                                                g,
+                                                h,
+                                                &G_factors,
+                                                &H_factors,
+                                                G.clone(),
+                                                H.clone(),
+                                                w_r.clone(),
+                                                w_l.clone(),
+                                                w_o.clone(),
+                                                w_v.clone(),
+                                                c.clone(),
+                                                a_l.clone(),
+                                                a_r.clone(),
+                                                a_o.clone(),
+                                                gamma.clone()
+                                            );
+
     }
 }
