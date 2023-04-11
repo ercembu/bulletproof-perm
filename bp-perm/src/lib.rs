@@ -145,7 +145,8 @@ impl ArithmeticCircuitProof {
             iter::once(h) 
                 .chain(G.into_iter().map(|g| *g))
                 .chain(H.into_iter().map(|h| *h))
-        );
+        )
+        .compress();
 
         let A_O = RistrettoPoint::vartime_multiscalar_mul(
             iter::once(beta)
@@ -155,7 +156,8 @@ impl ArithmeticCircuitProof {
                 ),
             iter::once(h)
                 .chain(G.into_iter().map(|g| *g))
-        );
+        )
+        .compress();
 
         let s_l = (0..n).map(|_| Scalar::random(&mut rng));
         let s_r = (0..n).map(|_| Scalar::random(&mut rng_2));
@@ -173,7 +175,7 @@ impl ArithmeticCircuitProof {
             iter::once(h)
                 .chain(G.into_iter().map(|g| *g))
                 .chain(H.into_iter().map(|h| *h))
-        );
+        ).compress();
         ///First prover done
         ///P -> V: A_I, A_O, S
         transcript.append_point(b"A_I", &A_I);
@@ -184,8 +186,8 @@ impl ArithmeticCircuitProof {
         let y = Scalar::random(&mut rng);
         let z = Scalar::random(&mut rng);
         ///V -> P: y,z
-        transcipt.append_scalar(b"y", &y);
-        transcipt.append_scalar(b"z", &z);
+        transcript.append_scalar(b"y", &y);
+        transcript.append_scalar(b"z", &z);
 
         ///P and V compute:
                 
