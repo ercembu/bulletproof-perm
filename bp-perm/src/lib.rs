@@ -14,6 +14,20 @@ use rand::prelude::*;
 use bulletproofs::{BulletproofGens, BulletproofGensShare, PedersenGens};
 use bulletproofs::ProofError;
 
+pub trait PowScalar {
+    fn pow(&mut self, n:u64) -> Scalar;
+}
+
+impl PowScalar for Scalar {
+    fn pow(&mut self, n: u64) -> Scalar {
+        let res = Scalar::one();
+        for n in 0..n {
+            res = res* *self;
+        }
+        res //usize cant be converted to u64 FIX
+    }
+}
+
 pub trait TranscriptProtocol {
     fn arithmetic_domain_sep(&mut self, n: u64);
 
@@ -186,10 +200,12 @@ impl ArithmeticCircuitProof {
         let y = Scalar::random(&mut rng);
         let z = Scalar::random(&mut rng);
         ///V -> P: y,z
-        transcript.append_scalar(b"y", &y);
-        transcript.append_scalar(b"z", &z);
+        //transcript.append_scalar(b"y", &y);
+        //transcript.append_scalar(b"z", &z);
 
         ///P and V compute:
+        //Figure out how to power Scalars, maybe a trait?
+        let y_n = (0..n).map(|pow| y.pow(pow));
                 
                                 
 
