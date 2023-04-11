@@ -14,6 +14,55 @@ use rand::prelude::*;
 use bulletproofs::{BulletproofGens, BulletproofGensShare, PedersenGens};
 use bulletproofs::ProofError;
 
+pub trait TranscriptProtocol {
+    fn arithmetic_domain_sep(&mut self, n: u64);
+
+    fn append_scalar(&mut self, label: &'static [u8], scalar:&Scalar);
+
+    fn append_point(&mut self, label: &'static [u8], point: &CompressedRistretto);
+
+    fn validate_and_append_point(&mut self, label: &'static [u8], point: &CompressedRistretto,) 
+        -> Result<(), ProofError>;
+
+    fn challenge_scalar(&mut self, label: &'static [u8]) -> Scalar;
+}
+
+impl TranscriptProtocol for Transcript {
+    fn arithmetic_domain_sep(&mut self, n: u64) {
+        self.append_message(b"dom-sep", b"acp v1");
+        self.append_u64(b"n", n);
+    }
+
+    fn append_scalar(&mut self, label: &'static [u8], scalar: &Scalar) {
+        self.append_message(label, scalar.as_bytes());
+    }
+
+    fn append_point(&mut self, label: &'static [u8], point: &CompressedRistretto) {
+        self.append_message(label, point.as_bytes());
+    }
+    fn validate_and_append_point(
+                &mut self,
+                label: &'static [u8],
+                point: &CompressedRistretto,
+            ) -> Result<(), ProofError> {
+        use curve25519_dalek_ng::traits::IsIdentity;
+
+        if point.is_identity() {
+            Err(ProofError::VerificationError)
+        } else {
+            Ok(self.append_message(label, point.as_bytes()))
+        }
+    }
+
+    fn challenge_scalar(&mut self, label: &'static [u8]) -> Scalar {
+        let mut buf = [0u8; 64];
+        self.challenge_bytes(label, &mut buf);
+
+        Scalar::from_bytes_mod_order_wide(&buf)
+    }
+
+
+}
 
 #[derive(Clone, Debug)]
 pub struct ArithmeticCircuitProof {
@@ -76,6 +125,8 @@ impl ArithmeticCircuitProof {
         let mut rng = rand::thread_rng();
         let mut rng_2 = rand::thread_rng();
 
+        transcript.arithmetic_domain_sep(n as u64);
+
         let alpha = Scalar::random(&mut rng);
         let beta = Scalar::random(&mut rng);
         let ro = Scalar::random(&mut rng);
@@ -123,6 +174,20 @@ impl ArithmeticCircuitProof {
                 .chain(G.into_iter().map(|g| *g))
                 .chain(H.into_iter().map(|h| *h))
         );
+        ///First prover done
+        ///P -> V: A_I, A_O, S
+        transcript.append_point(b"A_I", &A_I);
+        transcript.append_point(b"A_O", &A_O);
+        transcript.append_point(b"S", &S);
+
+
+        let y = Scalar::random(&mut rng);
+        let z = Scalar::random(&mut rng);
+        ///V -> P: y,z
+        transcipt.append_scalar(b"y", &y);
+        transcipt.append_scalar(b"z", &z);
+
+        ///P and V compute:
                 
                                 
 
