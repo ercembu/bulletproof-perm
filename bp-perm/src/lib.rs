@@ -14,6 +14,71 @@ use rand::prelude::*;
 use bulletproofs::{BulletproofGens, BulletproofGensShare, PedersenGens};
 use bulletproofs::ProofError;
 
+///Structs
+pub struct Poly6 {
+    pub t1: Scalar,
+    pub t2: Scalar,
+    pub t3: Scalar,
+    pub t4: Scalar,
+    pub t5: Scalar,
+    pub t6: Scalar,
+}
+
+impl Poly6 {
+    pub fn eval(&self, x: Scalar) -> Scalar {
+        x * (self.t1 + x * (self.t2 + x * (self.t3 + x * (self.t4 + x * (self.t5 + x * self.t6)))))
+    }
+}
+
+
+pub struct VecPoly3(
+    pub Vec<Scalar>,
+    pub Vec<Scalar>,
+    pub Vec<Scalar>,
+    pub Vec<Scalar>,
+);
+
+impl VecPoly3 {
+    pub fn zero(n: usize) -> Self {
+        VecPoly3(
+            vec![Scalar::zero(); n],
+            vec![Scalar::zero(); n],
+            vec![Scalar::zero(); n],
+            vec![Scalar::zero(); n],
+        )
+    }
+
+    pub fn special_inner_product(lhs: &Self, rhs: &Self) -> Poly6 {
+        let t1 = inner_product(&lhs.1, &rhs.0);
+        let t2 = inner_product(&lhs.1, &rhs.1) + inner_product(&lhs.2, &rhs.0);
+        let t3 = inner_product(&lhs.2, &rhs.1) + inner_product(&lhs.3, &rhs.0);
+        let t4 = inner_product(&lhs.1, &rhs.3) + inner_product(&lhs.3, &rhs.1);
+        let t5 = inner_product(&lhs.2, &rhs.3);
+        let t6 = inner_product(&lhs.3, &rhs.3);
+
+        Poly6 {
+            t1,
+            t2,
+            t3,
+            t4,
+            t5,
+            t6,
+        }
+    }
+
+    pub fn eval(&self, x: Scalar) -> Vec<Scalar> {
+        let n = self.0.len();
+        let mut out = vec![Scalar::zero(); n];
+        for i in 0..n {
+            out[i] = self.0[i] + x * (self.1[i] + x * (self.2[i] + x * self.3[i]));
+        }
+        out
+    }
+}
+
+
+///Util functions
+
 pub fn hadamard_V(a: &Vec<Scalar>, b: &Vec<Scalar>) -> Vec<Scalar> {
     let a_len = a.len();
 
@@ -48,6 +113,11 @@ pub fn vm_mult(a: &Vec<Scalar>, b: &Vec<Vec<Scalar>>) -> Vec<Scalar> {
     out
 }
 
+pub fn lm_mult(a: &[Scalar], b: &Vec<Vec<Scalar>>) -> Vec<Scalar> {
+    let m = Vec::from(a);
+    vm_mult(&m, b)
+}
+
 pub fn exp_iter(x:Scalar) -> ScalarExp {
     let next_exp_x = Scalar::one();
     ScalarExp { x, next_exp_x }
@@ -65,7 +135,7 @@ pub fn inner_product(a: &Vec<Scalar>, b: &Vec<Scalar>) -> Scalar {
 
 }
 
-
+/// Iterator for Scalar exponentiation
 pub struct ScalarExp {
     x: Scalar,
     next_exp_x: Scalar,
@@ -86,7 +156,7 @@ impl Iterator for ScalarExp {
 }
 
 
-
+///Transcript protocol for merlin
 pub trait TranscriptProtocol {
     fn arithmetic_domain_sep(&mut self, n: u64);
 
@@ -207,13 +277,13 @@ impl ArithmeticCircuitProof {
 
         let A_I = RistrettoPoint::vartime_multiscalar_mul(
             iter::once(alpha)
-                .chain(a_L_vec.into_iter()
+                .chain(a_L.into_iter()
                                 .zip(G_factors.into_iter())
-                                .map(|(a_L_i, g)| a_L_i * g)
+                                .map(|(a_L_i, g)| &*a_L_i * g)
                 )
-                .chain(a_R_vec.into_iter()
+                .chain(a_R.into_iter()
                                 .zip(H_factors.into_iter())
-                                .map(|(a_R_i, h)| a_R_i * h)
+                                .map(|(a_R_i, h)| &*a_R_i * h)
                 ),
             iter::once(h) 
                 .chain(G.into_iter().map(|g| *g))
@@ -223,25 +293,25 @@ impl ArithmeticCircuitProof {
 
         let A_O = RistrettoPoint::vartime_multiscalar_mul(
             iter::once(beta)
-                .chain(a_O_vec.into_iter()
+                .chain(a_O.into_iter()
                                 .zip(G_factors.into_iter())
-                                .map(|(a_O_i, g)| a_O_i * g)
+                                .map(|(a_O_i, g)| &*a_O_i * g)
                 ),
             iter::once(h)
                 .chain(G.into_iter().map(|g| *g))
         )
         .compress();
 
-        let s_l = (0..n).map(|_| Scalar::random(&mut rng));
-        let s_r = (0..n).map(|_| Scalar::random(&mut rng_2));
+        let s_l: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
+        let s_r: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng_2)).collect();
 
         let S = RistrettoPoint::vartime_multiscalar_mul(
             iter::once(ro)
-                .chain(s_l.into_iter()
+                .chain(s_l.iter()
                             .zip(G_factors.into_iter())
                             .map(|(s_l_i, g)| s_l_i * g)
                 )
-                .chain(s_r.into_iter()
+                .chain(s_r.iter()
                             .zip(H_factors.into_iter())
                             .map(|(s_r_i, h)| s_r_i * h)
                 ),
@@ -256,8 +326,11 @@ impl ArithmeticCircuitProof {
         transcript.append_point(b"S", &S);
 
 
-        let y = Scalar::random(&mut rng);
-        let z = Scalar::random(&mut rng);
+        let mut rng_3 = rand::thread_rng();
+        let y = Scalar::random(&mut rng_3);
+
+        let mut rng_4 = rand::thread_rng();
+        let z = Scalar::random(&mut rng_4);
         ///V -> P: y,z
         //transcript.append_scalar(b"y", &y);
         //transcript.append_scalar(b"z", &z);
@@ -289,6 +362,16 @@ impl ArithmeticCircuitProof {
         let z_W_L = vm_mult(&z_q, &W_L);
 
         let sigma_y_z = inner_product(&l_in, &z_W_L);
+
+        ///P computes:
+        ///L(X)
+        let mut l_x = VecPoly3::zero(n);
+        l_x.1 = a_L.into_iter().zip(l_in.iter()).map(|(k, l)| *k + l).collect();
+        l_x.2 = a_O.into_iter().map(|k| *k).collect();
+        l_x.3 = s_l.into_iter().map(|k| k).collect();
+
+        ///R(X)
+        let mut l_x = VecPoly3::zero(n);
                 
                                 
 
