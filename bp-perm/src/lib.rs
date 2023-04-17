@@ -14,19 +14,78 @@ use rand::prelude::*;
 use bulletproofs::{BulletproofGens, BulletproofGensShare, PedersenGens};
 use bulletproofs::ProofError;
 
-pub trait PowScalar {
-    fn pow(&mut self, n:u64) -> Scalar;
+pub fn hadamard_V(a: &Vec<Scalar>, b: &Vec<Scalar>) -> Vec<Scalar> {
+    let a_len = a.len();
+
+    if a_len != b.len() {
+        panic!("hadamard_V(a, b): a and b should have same size");
+    }
+
+    let mut out: Vec<Scalar> = (0..a.len()).map(|_| Scalar::one()).collect();
+
+    for i in 0..a_len {
+        out[i] *= a[i] * b[i];
+    }
+
+    out
 }
 
-impl PowScalar for Scalar {
-    fn pow(&mut self, n: u64) -> Scalar {
-        let res = Scalar::one();
-        for n in 0..n {
-            res = res* *self;
-        }
-        res //usize cant be converted to u64 FIX
+pub fn vm_mult(a: &Vec<Scalar>, b: &Vec<Vec<Scalar>>) -> Vec<Scalar> {
+    let a_len = a.len();
+    let b_len = b[0].len();
+
+    if a_len != b_len {
+        panic!("vm_mult(a,b): a -> 1xm, b -> mxn needs to be");
+    }
+
+    let mut out: Vec<Scalar> = (0..b_len).map(|_| Scalar::zero()).collect();
+    
+    for i in 0..a_len {
+        let col: Vec<Scalar> = (0..b_len).map(|j| b[i][j]).collect();
+        out[i] += inner_product(&a, &col);
+    }
+
+    out
+}
+
+pub fn exp_iter(x:Scalar) -> ScalarExp {
+    let next_exp_x = Scalar::one();
+    ScalarExp { x, next_exp_x }
+}
+
+pub fn inner_product(a: &Vec<Scalar>, b: &Vec<Scalar>) -> Scalar {
+    let mut out = Scalar::zero();
+    if a.len() != b.len() {
+        panic!("inner_product(a,b): lengths dont match");
+    }
+    for i in 0..a.len() {
+        out += a[i] * b[i];
+    }
+    out
+
+}
+
+
+pub struct ScalarExp {
+    x: Scalar,
+    next_exp_x: Scalar,
+}
+
+impl Iterator for ScalarExp {
+    type Item = Scalar;
+
+    fn next(&mut self) -> Option<Scalar> {
+        let exp_x = self.next_exp_x;
+        self.next_exp_x *= self.x;
+        Some(exp_x)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (usize::max_value(), None)
     }
 }
+
+
 
 pub trait TranscriptProtocol {
     fn arithmetic_domain_sep(&mut self, n: u64);
@@ -205,7 +264,31 @@ impl ArithmeticCircuitProof {
 
         ///P and V compute:
         //Figure out how to power Scalars, maybe a trait?
-        let y_n = (0..n).map(|pow| y.pow(pow));
+        let mut y_iter = exp_iter(y);
+        let y_n : Vec<Scalar> = iter::once(
+                        Scalar::zero())
+                            .chain((0..n-1)
+                                .map(|_| y_iter.next().unwrap()))
+                                .collect();
+        let y_n_inv :Vec<Scalar> = y_n.into_iter()
+                                        .map(|k| k.invert())
+                                        .collect();
+
+        let mut z_iter = exp_iter(z);
+        let z_q : Vec<Scalar> = (0..Q).map(|_| z_iter.next()
+                                        .unwrap())
+                                        .collect();
+
+
+
+        ///left of inner product
+        let z_W_R = vm_mult(&z_q, &W_R);
+        let l_in = hadamard_V(&y_n_inv, &z_W_R);
+
+        ///right of inner product
+        let z_W_L = vm_mult(&z_q, &W_L);
+
+        let sigma_y_z = inner_product(&l_in, &z_W_L);
                 
                                 
 
