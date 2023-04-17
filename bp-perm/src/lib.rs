@@ -103,11 +103,28 @@ pub fn vm_mult(a: &Vec<Scalar>, b: &Vec<Vec<Scalar>>) -> Vec<Scalar> {
         panic!("vm_mult(a,b): a -> 1xm, b -> mxn needs to be");
     }
 
-    let mut out: Vec<Scalar> = (0..b_len).map(|_| Scalar::zero()).collect();
+    let mut out: Vec<Scalar> = (0..a_len).map(|_| Scalar::zero()).collect();
     
     for i in 0..a_len {
-        let col: Vec<Scalar> = (0..b_len).map(|j| b[i][j]).collect();
+        let col: Vec<Scalar> = (0..a_len).map(|j| b[i][j]).collect();
         out[i] += inner_product(&a, &col);
+    }
+
+    out
+}
+
+pub fn mv_mult(a: &Vec<Vec<Scalar>>, b: &Vec<Scalar>) -> Vec<Scalar> {
+    let b_len = b.len();
+    let a_len = a.len();
+
+    if a_len != b_len {
+        panic!("mv_mult(a,b): a->nxm, b->mx1 needs to be");
+    }
+
+    let mut out: Vec<Scalar> = vec![Scalar::zero(); a[0].len()];
+
+    for i in 0..a[0].len() {
+        out[i] = inner_product(&(a[i]), b);
     }
 
     out
@@ -343,7 +360,7 @@ impl ArithmeticCircuitProof {
                             .chain((0..n-1)
                                 .map(|_| y_iter.next().unwrap()))
                                 .collect();
-        let y_n_inv :Vec<Scalar> = y_n.into_iter()
+        let y_n_inv :Vec<Scalar> = y_n.iter()
                                         .map(|k| k.invert())
                                         .collect();
 
@@ -365,13 +382,47 @@ impl ArithmeticCircuitProof {
 
         ///P computes:
         ///L(X)
-        let mut l_x = VecPoly3::zero(n);
-        l_x.1 = a_L.into_iter().zip(l_in.iter()).map(|(k, l)| *k + l).collect();
+        let mut l_x: VecPoly3 = VecPoly3::zero(n);
+        l_x.1 = a_L.into_iter()
+            .zip(l_in.iter())
+            .map(|(k, l)| *k + l)
+            .collect();
         l_x.2 = a_O.into_iter().map(|k| *k).collect();
         l_x.3 = s_l.into_iter().map(|k| k).collect();
 
         ///R(X)
-        let mut l_x = VecPoly3::zero(n);
+        let mut r_x: VecPoly3 = VecPoly3::zero(n);
+        r_x.0 = vm_mult(&z_q, &W_O).iter()
+            .zip(y_n.iter())
+            .map(|(k,l)| k - l)
+            .collect();
+        r_x.1 = hadamard_V(&y_n, &a_R.to_vec())
+            .iter()
+            .zip(
+                vm_mult(&z_q, &W_L)
+                .iter())
+            .map(|(k,l)| k + l).collect();
+        r_x.3 = hadamard_V(&y_n, &s_r)
+            .into_iter()
+            .map(|k| k).collect();
+
+        ///T(X)
+        let t_x = VecPoly3::special_inner_product(&l_x, &r_x);
+
+        let wl = mv_mult(&W_L, &(a_L.to_vec()));
+        let wr = mv_mult(&W_R, &(a_R.to_vec()));
+        let wo = mv_mult(&W_O, &(a_O.to_vec()));
+
+        let w: Vec<Scalar> = wl.iter()
+            .zip(wr.iter())
+            .zip(wo.iter())
+            .map(|((l, r), o)| l+r+o)
+            .collect();
+
+        //Time for t_2
+
+
+
                 
                                 
 
