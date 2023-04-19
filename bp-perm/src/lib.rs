@@ -419,7 +419,8 @@ impl ArithmeticCircuitProof {
             .map(|((l, r), o)| l+r+o)
             .collect();
 
-        //Time for t_2
+        //Time for t_2 = d(y,z) + <z_q, c + W_V.v>
+        let input_hadamard_product = inner_product(&(a_L.to_vec()), &());
 
 
 
