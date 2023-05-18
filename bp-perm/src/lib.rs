@@ -2,175 +2,26 @@
 
 extern crate alloc;
 
+mod util;
+use crate::util::{*};
+
+mod poly;
+use crate::poly::{*};
+
 use alloc::borrow::Borrow;
 use alloc::vec::Vec;
 
 use core::iter;
 use curve25519_dalek_ng::ristretto::{CompressedRistretto, RistrettoPoint};
-use curve25519_dalek_ng::scalar::Scalar;
 use curve25519_dalek_ng::traits::{VartimeMultiscalarMul, MultiscalarMul};
+use curve25519_dalek_ng::scalar::Scalar;
 use merlin::Transcript;
 use rand::prelude::*;
 use bulletproofs::{BulletproofGens, BulletproofGensShare, PedersenGens};
 use bulletproofs::ProofError;
 
-///Structs
-pub struct Poly6 {
-    pub t1: Scalar,
-    pub t2: Scalar,
-    pub t3: Scalar,
-    pub t4: Scalar,
-    pub t5: Scalar,
-    pub t6: Scalar,
-}
-
-impl Poly6 {
-    pub fn eval(&self, x: Scalar) -> Scalar {
-        x * (self.t1 + x * (self.t2 + x * (self.t3 + x * (self.t4 + x * (self.t5 + x * self.t6)))))
-    }
-}
 
 
-pub struct VecPoly3(
-    pub Vec<Scalar>,
-    pub Vec<Scalar>,
-    pub Vec<Scalar>,
-    pub Vec<Scalar>,
-);
-
-impl VecPoly3 {
-    pub fn zero(n: usize) -> Self {
-        VecPoly3(
-            vec![Scalar::zero(); n],
-            vec![Scalar::zero(); n],
-            vec![Scalar::zero(); n],
-            vec![Scalar::zero(); n],
-        )
-    }
-
-    pub fn special_inner_product(lhs: &Self, rhs: &Self) -> Poly6 {
-        let t1 = inner_product(&lhs.1, &rhs.0);
-        let t2 = inner_product(&lhs.1, &rhs.1) + inner_product(&lhs.2, &rhs.0);
-        let t3 = inner_product(&lhs.2, &rhs.1) + inner_product(&lhs.3, &rhs.0);
-        let t4 = inner_product(&lhs.1, &rhs.3) + inner_product(&lhs.3, &rhs.1);
-        let t5 = inner_product(&lhs.2, &rhs.3);
-        let t6 = inner_product(&lhs.3, &rhs.3);
-
-        Poly6 {
-            t1,
-            t2,
-            t3,
-            t4,
-            t5,
-            t6,
-        }
-    }
-
-    pub fn eval(&self, x: Scalar) -> Vec<Scalar> {
-        let n = self.0.len();
-        let mut out = vec![Scalar::zero(); n];
-        for i in 0..n {
-            out[i] = self.0[i] + x * (self.1[i] + x * (self.2[i] + x * self.3[i]));
-        }
-        out
-    }
-}
-
-
-///Util functions
-
-pub fn hadamard_V(a: &Vec<Scalar>, b: &Vec<Scalar>) -> Vec<Scalar> {
-    let a_len = a.len();
-
-    if a_len != b.len() {
-        panic!("hadamard_V(a, b): a and b should have same size");
-    }
-
-    let mut out: Vec<Scalar> = (0..a.len()).map(|_| Scalar::one()).collect();
-
-    for i in 0..a_len {
-        out[i] *= a[i] * b[i];
-    }
-
-    out
-}
-
-pub fn vm_mult(a: &Vec<Scalar>, b: &Vec<Vec<Scalar>>) -> Vec<Scalar> {
-    let a_len = a.len();
-    let b_len = b[0].len();
-
-    if a_len != b_len {
-        panic!("vm_mult(a,b): a -> 1xm, b -> mxn needs to be");
-    }
-
-    let mut out: Vec<Scalar> = (0..a_len).map(|_| Scalar::zero()).collect();
-    
-    for i in 0..a_len {
-        let col: Vec<Scalar> = (0..a_len).map(|j| b[i][j]).collect();
-        out[i] += inner_product(&a, &col);
-    }
-
-    out
-}
-
-pub fn mv_mult(a: &Vec<Vec<Scalar>>, b: &Vec<Scalar>) -> Vec<Scalar> {
-    let b_len = b.len();
-    let a_len = a.len();
-
-    if a_len != b_len {
-        panic!("mv_mult(a,b): a->nxm, b->mx1 needs to be");
-    }
-
-    let mut out: Vec<Scalar> = vec![Scalar::zero(); a[0].len()];
-
-    for i in 0..a[0].len() {
-        out[i] = inner_product(&(a[i]), b);
-    }
-
-    out
-}
-
-pub fn lm_mult(a: &[Scalar], b: &Vec<Vec<Scalar>>) -> Vec<Scalar> {
-    let m = Vec::from(a);
-    vm_mult(&m, b)
-}
-
-pub fn exp_iter(x:Scalar) -> ScalarExp {
-    let next_exp_x = Scalar::one();
-    ScalarExp { x, next_exp_x }
-}
-
-pub fn inner_product(a: &Vec<Scalar>, b: &Vec<Scalar>) -> Scalar {
-    let mut out = Scalar::zero();
-    if a.len() != b.len() {
-        panic!("inner_product(a,b): lengths dont match");
-    }
-    for i in 0..a.len() {
-        out += a[i] * b[i];
-    }
-    out
-
-}
-
-/// Iterator for Scalar exponentiation
-pub struct ScalarExp {
-    x: Scalar,
-    next_exp_x: Scalar,
-}
-
-impl Iterator for ScalarExp {
-    type Item = Scalar;
-
-    fn next(&mut self) -> Option<Scalar> {
-        let exp_x = self.next_exp_x;
-        self.next_exp_x *= self.x;
-        Some(exp_x)
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (usize::max_value(), None)
-    }
-}
 
 
 ///Transcript protocol for merlin
@@ -343,11 +194,8 @@ impl ArithmeticCircuitProof {
         transcript.append_point(b"S", &S);
 
 
-        let mut rng_3 = rand::thread_rng();
-        let y = Scalar::random(&mut rng_3);
-
-        let mut rng_4 = rand::thread_rng();
-        let z = Scalar::random(&mut rng_4);
+        let y = transcript.challenge_scalar(b"y");
+        let z = transcript.challenge_scalar(b"z");
         ///V -> P: y,z
         //transcript.append_scalar(b"y", &y);
         //transcript.append_scalar(b"z", &z);
@@ -420,12 +268,63 @@ impl ArithmeticCircuitProof {
             .collect();
 
         //Time for t_2 = d(y,z) + <z_q, c + W_V.v>
-        let input_hadamard_product = inner_product(&(a_L.to_vec()), &());
+        let input_hadamard_product = inner_product(&a_L.to_vec(), &hadamard_V(&a_R.to_vec(), &y_n));
+        let t_2 = input_hadamard_product + inner_product(&z_q, &w) + sigma_y_z - inner_product(&a_O.to_vec(), &y_n);
 
 
+        let tau_1 = Scalar::random(&mut rng);
+        let t_1 = t_x.eval(Scalar::one());
+        let T_1: CompressedRistretto = RistrettoPoint::vartime_multiscalar_mul(
+            iter::once(t_1)
+                .chain(iter::once(tau_1))
+            ,iter::once(g)
+                .chain(iter::once(h))
+        ).compress();
+        transcript.append_point(b"T1", &T_1);
 
-                
-                                
+        let tau_3 = Scalar::random(&mut rng);
+        let three = Scalar::one() + Scalar::one() + Scalar::one();
+        let t_3 = t_x.eval(three);
+        let T_3: CompressedRistretto = RistrettoPoint::vartime_multiscalar_mul(
+            iter::once(t_3)
+                .chain(iter::once(tau_3))
+            ,iter::once(g)
+                .chain(iter::once(h))
+        ).compress();
+        transcript.append_point(b"T3", &T_3);
+
+        let tau_4 = Scalar::random(&mut rng);
+        let four = three + Scalar::one();
+        let t_4 = t_x.eval(Scalar::one());
+        let T_4: CompressedRistretto = RistrettoPoint::vartime_multiscalar_mul(
+            iter::once(t_4)
+                .chain(iter::once(tau_4))
+            ,iter::once(g)
+                .chain(iter::once(h))
+        ).compress();
+        transcript.append_point(b"T4", &T_3);
+
+        let tau_5 = Scalar::random(&mut rng);
+        let five = four + Scalar::one();
+        let t_5 = t_x.eval(Scalar::one());
+        let T_5: CompressedRistretto = RistrettoPoint::vartime_multiscalar_mul(
+            iter::once(t_5)
+                .chain(iter::once(tau_5))
+            ,iter::once(g)
+                .chain(iter::once(h))
+        ).compress();
+        transcript.append_point(b"T5", &T_5);
+
+        let tau_6 = Scalar::random(&mut rng);
+        let size = five + Scalar::one();
+        let t_6 = t_x.eval(Scalar::one());
+        let T_6: CompressedRistretto = RistrettoPoint::vartime_multiscalar_mul(
+            iter::once(t_6)
+                .chain(iter::once(tau_6))
+            ,iter::once(g)
+                .chain(iter::once(h))
+        ).compress();
+        transcript.append_point(b"T6", &T_6);
 
         ArithmeticCircuitProof{
             L_vec: L_vec,
