@@ -272,6 +272,7 @@ impl ArithmeticCircuitProof {
         let t_2 = input_hadamard_product + inner_product(&z_q, &w) + sigma_y_z - inner_product(&a_O.to_vec(), &y_n);
 
 
+        //P -> V: T_1, T_2, T_3, T_4, T_5, T_6
         let tau_1 = Scalar::random(&mut rng);
         let t_1 = t_x.eval(Scalar::one());
         let T_1: CompressedRistretto = RistrettoPoint::vartime_multiscalar_mul(
@@ -295,7 +296,7 @@ impl ArithmeticCircuitProof {
 
         let tau_4 = Scalar::random(&mut rng);
         let four = three + Scalar::one();
-        let t_4 = t_x.eval(Scalar::one());
+        let t_4 = t_x.eval(four);
         let T_4: CompressedRistretto = RistrettoPoint::vartime_multiscalar_mul(
             iter::once(t_4)
                 .chain(iter::once(tau_4))
@@ -306,7 +307,7 @@ impl ArithmeticCircuitProof {
 
         let tau_5 = Scalar::random(&mut rng);
         let five = four + Scalar::one();
-        let t_5 = t_x.eval(Scalar::one());
+        let t_5 = t_x.eval(five);
         let T_5: CompressedRistretto = RistrettoPoint::vartime_multiscalar_mul(
             iter::once(t_5)
                 .chain(iter::once(tau_5))
@@ -316,8 +317,8 @@ impl ArithmeticCircuitProof {
         transcript.append_point(b"T5", &T_5);
 
         let tau_6 = Scalar::random(&mut rng);
-        let size = five + Scalar::one();
-        let t_6 = t_x.eval(Scalar::one());
+        let six = five + Scalar::one();
+        let t_6 = t_x.eval(six);
         let T_6: CompressedRistretto = RistrettoPoint::vartime_multiscalar_mul(
             iter::once(t_6)
                 .chain(iter::once(tau_6))
@@ -325,6 +326,39 @@ impl ArithmeticCircuitProof {
                 .chain(iter::once(h))
         ).compress();
         transcript.append_point(b"T6", &T_6);
+
+        //V: x <- Z
+        let x = transcript.challenge_scalar(b"x");
+
+        //V -> P: x
+        //P computes:
+        let l = l_x.eval(x);
+        let r = r_x.eval(x);
+        let t = inner_product(&l, &r);
+
+        let mut tau_x = Scalar::zero();
+        tau_x += (tau_1 * x) + x * x * inner_product(&z_q, &mv_mult(&W_V, &gamma));
+        tau_x += (tau_3 * scalar_exp(&x, 3)) + x * x * inner_product(&z_q, &mv_mult(&W_V, &gamma));
+        tau_x += (tau_4 * scalar_exp(&x, 4)) + x * x * inner_product(&z_q, &mv_mult(&W_V, &gamma));
+        tau_x += (tau_5 * scalar_exp(&x, 5)) + x * x * inner_product(&z_q, &mv_mult(&W_V, &gamma));
+        tau_x += (tau_6 * scalar_exp(&x, 6)) + x * x * inner_product(&z_q, &mv_mult(&W_V, &gamma));
+
+        let mu = alpha * x + beta * scalar_exp(&x, 2) + ro * scalar_exp(&x, 3);
+
+        //P -> V: tau_x, mu, t, l, r
+        transcript.append_scalar(b"TX", &tau_x);
+        transcript.append_scalar(b"mu", &mu);
+        ///transcript.append_scalar(b"l", &l);
+        ///transcript.append_scalar(b"r", &r);
+        transcript.append_scalar(b"t", &t);
+
+        //V computes and checks
+        let h_: Vec<Scalar> = (1..n).map(|i| scalar_exp_u(&H_factors[i-1], 1-i)).collect();
+        //find W_L
+        //find W_R
+        //find W_0
+        //then the checks
+
 
         ArithmeticCircuitProof{
             L_vec: L_vec,

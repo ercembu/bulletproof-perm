@@ -63,6 +63,23 @@ pub fn exp_iter(x:Scalar) -> ScalarExp {
     ScalarExp { x, next_exp_x }
 }
 
+pub fn scalar_exp_u(x: &Scalar, pow: usize) -> Scalar {
+    let mut result = Scalar::one();
+    for i in 0..pow {
+        result *= x;
+    }
+
+    result
+}
+pub fn scalar_exp(x: &Scalar, pow: i32) -> Scalar {
+    let mut result = Scalar::one();
+    for i in 0..pow {
+        result *= x;
+    }
+
+    result
+}
+
 pub fn inner_product(a: &Vec<Scalar>, b: &Vec<Scalar>) -> Scalar {
     let mut out = Scalar::zero();
     if a.len() != b.len() {
