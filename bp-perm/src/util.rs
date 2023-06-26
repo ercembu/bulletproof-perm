@@ -6,7 +6,7 @@ pub fn hadamard_V(a: &Vec<Scalar>, b: &Vec<Scalar>) -> Vec<Scalar> {
     let a_len = a.len();
 
     if a_len != b.len() {
-        panic!("hadamard_V(a, b): a and b should have same size");
+        panic!("hadamard_V(a, b): {} and {} should have same size", a_len, b.len());
     }
 
     let mut out: Vec<Scalar> = (0..a.len()).map(|_| Scalar::one()).collect();
@@ -23,12 +23,12 @@ pub fn vm_mult(a: &Vec<Scalar>, b: &Vec<Vec<Scalar>>) -> Vec<Scalar> {
     let b_len = b[0].len();
 
     if a_len != b_len {
-        panic!("vm_mult(a,b): a -> 1xm, b -> mxn needs to be");
+        panic!("vm_mult(a,b): a -> 1x{}, b -> {}x{} needs to be", a_len, b_len, b.len());
     }
 
-    let mut out: Vec<Scalar> = (0..a_len).map(|_| Scalar::zero()).collect();
+    let mut out: Vec<Scalar> = (0..b.len()).map(|_| Scalar::zero()).collect();
     
-    for i in 0..a_len {
+    for i in 0..b.len() {
         let col: Vec<Scalar> = (0..a_len).map(|j| b[i][j]).collect();
         out[i] += inner_product(&a, &col);
     }
@@ -38,16 +38,17 @@ pub fn vm_mult(a: &Vec<Scalar>, b: &Vec<Vec<Scalar>>) -> Vec<Scalar> {
 
 pub fn mv_mult(a: &Vec<Vec<Scalar>>, b: &Vec<Scalar>) -> Vec<Scalar> {
     let b_len = b.len();
-    let a_len = a.len();
+    let a_len = a[0].len();
 
-    if a_len != b_len {
-        panic!("mv_mult(a,b): a->nxm, b->mx1 needs to be");
+    if a.len() != b_len {
+        panic!("mv_mult(a,b): a->{}x{}, b->{}x1 needs to be", a.len(), a_len, b_len);
     }
 
-    let mut out: Vec<Scalar> = vec![Scalar::zero(); a[0].len()];
+    let mut out: Vec<Scalar> = vec![Scalar::zero(); a_len];
 
-    for i in 0..a[0].len() {
-        out[i] = inner_product(&(a[i]), b);
+    for i in 0..a_len{
+        let col: Vec<Scalar> = (0..a.len()).map(|j| a[j][i]).collect();
+        out[i] = inner_product(&col, b);
     }
 
     out
@@ -83,7 +84,7 @@ pub fn scalar_exp(x: &Scalar, pow: i32) -> Scalar {
 pub fn inner_product(a: &Vec<Scalar>, b: &Vec<Scalar>) -> Scalar {
     let mut out = Scalar::zero();
     if a.len() != b.len() {
-        panic!("inner_product(a,b): lengths dont match");
+        panic!("inner_product(a,b): lengths dont match, {}, {}", a.len(), b.len());
     }
     for i in 0..a.len() {
         out += a[i] * b[i];

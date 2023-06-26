@@ -101,9 +101,7 @@ impl ArithmeticCircuitProof {
         mut a_O_vec: Vec<Scalar>,
         mut gamma: Vec<Scalar>
 
-    ) -> ArithmeticCircuitProof {
-        /// temporary resolution while debugging
-        let mut L_vec = Vec::with_capacity(5);
+    ) -> Result<(), ProofError> {
 
         let mut G = &mut G_vec[..];
         let mut H = &mut H_vec[..];
@@ -115,23 +113,23 @@ impl ArithmeticCircuitProof {
         let mut n = G.len();
 
         assert_eq!(H.len(), n);
-        assert_eq!(W_L[0].len(), n);
-        assert_eq!(W_R[0].len(), n);
-        assert_eq!(W_O[0].len(), n);
+        assert_eq!(W_L.len(), n);
+        assert_eq!(W_R.len(), n);
+        assert_eq!(W_O.len(), n);
         assert_eq!(a_L.len(), n);
         assert_eq!(a_R.len(), n);
         assert_eq!(a_O.len(), n);
 
         let mut m = gamma.len();
 
-        assert_eq!(W_V[0].len(), m);
+        assert_eq!(W_V.len(), m);
 
-        let Q = W_L.len();
+        let Q = W_L[0].len();
 
-        assert_eq!(W_R.len(), Q);
-        assert_eq!(W_L.len(), Q);
-        assert_eq!(W_O.len(), Q);
-        assert_eq!(W_V.len(), Q);
+        assert_eq!(W_R[0].len(), Q);
+        assert_eq!(W_L[0].len(), Q);
+        assert_eq!(W_O[0].len(), Q);
+        assert_eq!(W_V[0].len(), Q);
 
         let mut rng = rand::thread_rng();
         let mut rng_2 = rand::thread_rng();
@@ -353,16 +351,33 @@ impl ArithmeticCircuitProof {
         transcript.append_scalar(b"t", &t);
 
         //V computes and checks
-        let h_: Vec<Scalar> = (1..n).map(|i| scalar_exp_u(&H_factors[i-1], 1-i)).collect();
-        //find W_L
-        //find W_R
+        let h_: Vec<RistrettoPoint> = std::iter::zip(y_n_inv, H).map(|(y, h)| *h * y).collect();
+        //find W_L z_W_L
+        //find W_R z_W_R
         //find W_0
         //then the checks
+        let weights_L: RistrettoPoint = RistrettoPoint::vartime_multiscalar_mul(
+            z_W_L.into_iter(),
+            h_.iter()
+        );
 
+        let weights_R: RistrettoPoint = RistrettoPoint::vartime_multiscalar_mul(
+            l_in.iter(),
+            G.iter().map(|g| *g)
+        );
 
-        ArithmeticCircuitProof{
-            L_vec: L_vec,
+        let weights_O: RistrettoPoint = RistrettoPoint::vartime_multiscalar_mul(
+            vm_mult(&z_q, &W_O).iter(),
+            h_.iter()
+        );
+
+        if t != inner_product(&l, &r) {
+            Err(ProofError::VerificationError)
+        } else {
+            Ok(())
         }
+
+
     }
 }
 
@@ -400,7 +415,7 @@ mod tests {
         let a_r: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
         let a_o: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
 
-        let gamma: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
+        let gamma: Vec<Scalar> = (0..m).map(|_| Scalar::random(&mut rng)).collect();
 
         let proof = ArithmeticCircuitProof::create(
                                                 &mut trans,
@@ -420,6 +435,12 @@ mod tests {
                                                 a_o.clone(),
                                                 gamma.clone()
                                             );
+        assert!(proof.is_ok());
 
+    }
+
+    #[test]
+    fn test_1() {
+        test_first(6, 1);
     }
 }
