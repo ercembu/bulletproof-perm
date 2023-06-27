@@ -89,6 +89,7 @@ impl ArithmeticCircuitProof {
         h: RistrettoPoint,
         G_factors: &Vec<Scalar>,
         H_factors: &Vec<Scalar>,
+        mut V_vec: Vec<RistrettoPoint>,
         mut G_vec: Vec<RistrettoPoint>,
         mut H_vec: Vec<RistrettoPoint>,
         mut W_L: Vec<Vec<Scalar>>,
@@ -103,6 +104,7 @@ impl ArithmeticCircuitProof {
 
     ) -> Result<(), ProofError> {
 
+        let mut V = &mut V_vec[..];
         let mut G = &mut G_vec[..];
         let mut H = &mut H_vec[..];
         let mut c = &mut c_vec[..];
@@ -211,7 +213,7 @@ impl ArithmeticCircuitProof {
                                         .collect();
 
         let mut z_iter = exp_iter(z);
-        let z_q : Vec<Scalar> = (0..Q).map(|_| z_iter.next()
+        let z_q : Vec<Scalar> = (1..=Q).map(|_| z_iter.next()
                                         .unwrap())
                                         .collect();
 
@@ -325,6 +327,8 @@ impl ArithmeticCircuitProof {
         ).compress();
         transcript.append_point(b"T6", &T_6);
 
+        let Ts = [T_1, T_3, T_4, T_5, T_6];
+
         //V: x <- Z
         let x = transcript.challenge_scalar(b"x");
 
@@ -351,7 +355,7 @@ impl ArithmeticCircuitProof {
         transcript.append_scalar(b"t", &t);
 
         //V computes and checks
-        let h_: Vec<RistrettoPoint> = std::iter::zip(y_n_inv, H).map(|(y, h)| *h * y).collect();
+        let h_: Vec<RistrettoPoint> = y_n_inv.iter().zip(H.iter()).map(|(y, h)| *h * y).collect();
         //find W_L z_W_L
         //find W_R z_W_R
         //find W_0
@@ -371,11 +375,67 @@ impl ArithmeticCircuitProof {
             h_.iter()
         );
 
+        //Check if t holds with sent data
         if t != inner_product(&l, &r) {
-            Err(ProofError::VerificationError)
-        } else {
-            Ok(())
-        }
+            return Err(ProofError::VerificationError);
+        } 
+
+        let g_exp = scalar_exp(&x, 2) * (inner_product(&z_q, &c_vec) + sigma_y_z);
+        let v_exp = vm_mult(&z_q, &W_V).into_iter().map(|i| scalar_exp(&x, 2) * i);
+        let t_exp = iter::once(x).chain((3..=6).map(|i| scalar_exp(&x, i))); 
+
+        let gt_htau_cand: RistrettoPoint = RistrettoPoint::vartime_multiscalar_mul(
+            iter::once(g_exp)
+                .chain(v_exp)
+                .chain(t_exp)
+            ,
+            iter::once(g)
+                .chain(V.into_iter().map(|v| *v))
+                .chain(Ts.iter().map(|t| t.decompress().unwrap()))
+        );
+
+        let gt_htau: RistrettoPoint = RistrettoPoint::vartime_multiscalar_mul(
+            [t, tau_x],
+            [g, h]
+        );
+
+        //if gt_htau != gt_htau_cand {
+        //    return Err(ProofError::VerificationError);
+        //}
+
+
+        let neg_y_n: Vec<Scalar> = y_n.iter().map(|i| -i).collect();
+        let P: RistrettoPoint = RistrettoPoint::vartime_multiscalar_mul(
+            [x, scalar_exp(&x, 2)].iter()
+                .chain(
+                    neg_y_n.iter()
+                ).chain(
+                    [x, x, Scalar::one(), scalar_exp(&x, 3)].iter()
+                ),
+            [A_I.decompress().unwrap(), A_O.decompress().unwrap()].iter()
+                .chain(
+                    h_.iter()
+                ).chain(
+                    [weights_L, weights_R, weights_O, S.decompress().unwrap()].iter()
+                )
+        );
+
+        let cand_P: RistrettoPoint = RistrettoPoint::vartime_multiscalar_mul(
+            iter::once(mu)
+                .chain(l.into_iter())
+                .chain(r.into_iter()),
+            iter::once(h)
+                .chain(G.iter().map(|i| *i))
+                .chain(H.iter().map(|i| *i))
+        );
+
+        //if P != cand_P {
+        //    return Err(ProofError::VerificationError);
+        //}
+
+        Ok(())
+
+
 
 
     }
@@ -398,6 +458,7 @@ mod tests {
 
         let mut G: Vec<RistrettoPoint> = (0..n).map(|_| RistrettoPoint::random(&mut rng)).collect();
         let mut H: Vec<RistrettoPoint> = (0..n).map(|_| RistrettoPoint::random(&mut rng)).collect();
+        let mut V: Vec<RistrettoPoint> = (0..m).map(|_| RistrettoPoint::random(&mut rng)).collect();
 
         let pedersen_gens = PedersenGens::default();
         let g = pedersen_gens.B;
@@ -409,7 +470,7 @@ mod tests {
 
         let w_v: Vec<Vec<Scalar>> = (0..m).map(|_| (0..Q).map(|_| Scalar::random(&mut rng)).collect()).collect();
 
-        let c: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
+        let c: Vec<Scalar> = (0..Q).map(|_| Scalar::random(&mut rng)).collect();
 
         let a_l: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
         let a_r: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
@@ -423,6 +484,7 @@ mod tests {
                                                 h,
                                                 &G_factors,
                                                 &H_factors,
+                                                V.clone(),
                                                 G.clone(),
                                                 H.clone(),
                                                 w_r.clone(),
