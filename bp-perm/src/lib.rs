@@ -8,6 +8,9 @@ use crate::util::{*};
 mod poly;
 use crate::poly::{*};
 
+mod weights;
+use crate::weights::{*};
+
 use alloc::borrow::Borrow;
 use alloc::vec::Vec;
 
@@ -470,7 +473,7 @@ mod tests {
 
         let w_v: Vec<Vec<Scalar>> = (0..m).map(|_| (0..Q).map(|_| Scalar::random(&mut rng)).collect()).collect();
 
-        let c: Vec<Scalar> = (0..Q).map(|_| Scalar::random(&mut rng)).collect();
+        let c: Vec<Scalar> = create_constants(Q);
 
         let a_l: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
         let a_r: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
