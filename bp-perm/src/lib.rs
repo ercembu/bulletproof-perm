@@ -452,7 +452,8 @@ mod tests {
         let mut rng = rand::thread_rng();
 
         let bp_gens = BulletproofGens::new(n,1);
-        let Q = n / 2;
+        let Q = 2 * n;
+        let k = n / 2; //card count 
 
         let mut trans = Transcript::new(b"test");
 
@@ -461,7 +462,8 @@ mod tests {
 
         let mut G: Vec<RistrettoPoint> = (0..n).map(|_| RistrettoPoint::random(&mut rng)).collect();
         let mut H: Vec<RistrettoPoint> = (0..n).map(|_| RistrettoPoint::random(&mut rng)).collect();
-        let mut V: Vec<RistrettoPoint> = (0..m).map(|_| RistrettoPoint::random(&mut rng)).collect();
+        let mut V: Vec<RistrettoPoint> = create_variables(k);
+        //(0..m).map(|_| RistrettoPoint::random(&mut rng)).collect();
 
         let pedersen_gens = PedersenGens::default();
         let g = pedersen_gens.B;
@@ -506,6 +508,6 @@ mod tests {
 
     #[test]
     fn test_1() {
-        test_first(6, 1);
+        test_first(6, 7);
     }
 }
