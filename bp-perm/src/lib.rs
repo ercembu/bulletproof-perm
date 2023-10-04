@@ -462,8 +462,9 @@ mod tests {
 
         let mut trans = Transcript::new(b"test");
 
-        let G_factors: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
-        let H_factors: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
+        let G_factors: Vec<Scalar> = (0..n).map(|_| Scalar::one()).collect();
+        let rand_chal = exp_iter(Scalar::random(&mut rng));
+        let H_factors: Vec<Scalar> = rand_chal.take(n).collect();
 
         let mut G: Vec<RistrettoPoint> = (0..n).map(|_| RistrettoPoint::random(&mut rng)).collect();
         let mut H: Vec<RistrettoPoint> = (0..n).map(|_| RistrettoPoint::random(&mut rng)).collect();
@@ -471,9 +472,8 @@ mod tests {
         let mut V: Vec<RistrettoPoint> = commit_variables(&v, &pd_gen);
         //(0..m).map(|_| RistrettoPoint::random(&mut rng)).collect();
 
-        let pedersen_gens = PedersenGens::default();
-        let g = pedersen_gens.B;
-        let h = pedersen_gens.B_blinding;
+        let g = pd_gen.B;
+        let h = pd_gen.B_blinding;
 
         let w_r: Vec<Vec<Scalar>> = (0..n).map(|_| (0..Q).map(|_| Scalar::random(&mut rng)).collect()).collect();
         let w_l: Vec<Vec<Scalar>> = (0..n).map(|_| (0..Q).map(|_| Scalar::random(&mut rng)).collect()).collect();
