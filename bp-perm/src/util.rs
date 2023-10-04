@@ -93,6 +93,15 @@ pub fn inner_product(a: &Vec<Scalar>, b: &Vec<Scalar>) -> Scalar {
 
 }
 
+pub fn give_n(n: i64) -> Scalar {
+    let mut zero = Scalar::zero();
+    for i in 0..n {
+        zero += Scalar::one();
+    }
+
+    zero
+}
+
 /// Iterator for Scalar exponentiation
 pub struct ScalarExp {
     x: Scalar,
