@@ -463,6 +463,7 @@ mod tests {
         let mut trans = Transcript::new(b"test");
 
         let G_factors: Vec<Scalar> = (0..n).map(|_| Scalar::one()).collect();
+
         let rand_chal = exp_iter(Scalar::random(&mut rng));
         let H_factors: Vec<Scalar> = rand_chal.take(n).collect();
 
@@ -483,9 +484,10 @@ mod tests {
 
         let c: Vec<Scalar> = create_constants(Q);
 
-        let a_l: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
-        let a_r: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
-        let a_o: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
+        let (a_l, a_r, a_o) = create_a(&v, &c);
+        //let a_l: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
+        //let a_r: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
+        //let a_o: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
 
         let gamma: Vec<Scalar> = (0..m).map(|_| Scalar::random(&mut rng)).collect();
 

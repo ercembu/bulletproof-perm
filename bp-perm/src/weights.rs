@@ -53,6 +53,53 @@ pub fn commit_variables(variables: &Vec<Scalar>, pd_generator: &PedersenGens) ->
     variables.iter().map(|v| pd_generator.commit(*v, Scalar::random(&mut rng))).collect()
 }
 
+pub fn create_a(variables: &Vec<Scalar>, constants: &Vec<Scalar>) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>) {
+    let n = variables.len() - 1;
+    let mut a_L: Vec<Scalar> = vec![Scalar::zero(); n];//Vec::new();
+    let mut a_R: Vec<Scalar> = vec![Scalar::zero(); n];
+    let mut a_O: Vec<Scalar> = vec![Scalar::zero(); n];
+
+    let first_half = &variables[..n/2];
+    let second_half = &variables[n/2..n];
+
+    //a_L[n/2] = variables
+    let &x = variables.last().unwrap();
+
+    let offset = (n-1)/2;
+
+    for i in 0..first_half.len() - 1 {
+
+        a_R[i] = first_half[i+1] - x;
+        a_R[i+offset] = second_half[i+1] - x;
+
+        if i == 0 {
+            a_L[i] = first_half[i] - x;
+            a_L[i + offset] = second_half[i] - x;
+
+        } else {
+            a_L[i] = a_O[i - 1];
+            a_L[i + offset] = a_O[i + offset - 1];
+
+        }
+
+        a_O[i] = a_L[i] * a_R[i];
+        a_O[i + offset] = a_L[i + offset] * a_R[i + offset];
+
+    }
+
+    a_L[n-2] = a_O[n-3];
+    a_R[n-2] = -Scalar::one();
+    a_O[n-2] = a_L[n-2] * a_L[n-2];
+
+    a_L[n-1] = a_O[offset] + a_O[n-2];
+    a_R[n-1] = Scalar::one();
+    a_O[n-1] = a_L[n-1] * a_L[n-1];
+    
+
+    (a_L, a_R, a_O)
+    
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
