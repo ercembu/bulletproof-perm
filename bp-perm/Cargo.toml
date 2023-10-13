@@ -12,3 +12,4 @@ curve25519-dalek-ng = {version = "^4"}
 rand = {version = "*"}
 sha3 = {version="*"}
 shuffle = {version="*"}
+ethnum = {version="*"}

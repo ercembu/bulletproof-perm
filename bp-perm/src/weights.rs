@@ -8,6 +8,7 @@ use alloc::vec::Vec;
 use sha3::Sha3_512;
 use shuffle::irs::Irs;
 use std::convert::TryInto;
+use ethnum::U256;
 
 use core::iter;
 use curve25519_dalek_ng::scalar::Scalar;
@@ -53,7 +54,7 @@ pub fn commit_variables(variables: &Vec<Scalar>, pd_generator: &PedersenGens) ->
     variables.iter().map(|v| pd_generator.commit(*v, Scalar::random(&mut rng))).collect()
 }
 
-pub fn create_a(variables: &Vec<Scalar>, constants: &Vec<Scalar>) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>) {
+pub fn create_a(variables: &Vec<Scalar>) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scalar>) {
     let n = variables.len() - 1;
     let mut a_L: Vec<Scalar> = vec![Scalar::zero(); n];//Vec::new();
     let mut a_R: Vec<Scalar> = vec![Scalar::zero(); n];
@@ -100,13 +101,32 @@ pub fn create_a(variables: &Vec<Scalar>, constants: &Vec<Scalar>) -> (Vec<Scalar
     
 }
 
+pub fn create_weights(card_count: usize) -> (Vec<Vec<Scalar>>, Vec<Vec<Scalar>>, Vec<Vec<Scalar>>, Vec<Vec<Scalar>>) {
+    let n = card_count * 2;
+    let Q = n * 2;
+    let mut w_l: Vec<Vec<Scalar>>  = vec![vec![Scalar::zero(); Q]; n]; 
+    let mut w_r: Vec<Vec<Scalar>>  = vec![vec![Scalar::zero(); Q]; n]; 
+    let mut w_o: Vec<Vec<Scalar>>  = vec![vec![Scalar::zero(); Q]; n]; 
+    let mut w_v: Vec<Vec<Scalar>> = vec![vec![Scalar::zero(); Q]; n+1];
+
+    for i in 0..n {
+        for j in 0..Q {
+            if i == j {w_l[i][j] = Scalar::one();}
+            else if i + n == j {w_r[i+n][j] = Scalar::one();}
+            //TODO: w_l and w_r done add the w_o and w_v and you're DONE!!!!
+        }
+    }
+
+    (w_l, w_r, w_o, w_v)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn test_constants(k: usize) {
-        //Deck size k, convert to Q(linear constraint count) from n(multiplication gate count)
-        let Q = k * 2 * 2;
+    fn test_constants(card_count: usize) {
+        //Deck size card_count, convert to Q(linear constraint count) from n(multiplication gate count)
+        let Q = card_count * 2 * 2;
 
         let c = create_constants(Q);
         for i in 0..Q-2 {
@@ -119,9 +139,41 @@ mod tests {
         assert_eq!(Scalar::one(), c[Q-1]);
     }
 
+    fn test_variables(card_count: usize) {
+        let v = create_variables(card_count);
+        for i in 0..v.len() {
+            println!("{:#?}", v[i]);
+            println!("{:#?}\n", U256::from_le_bytes(*v[i].as_bytes()));
+        }
+        assert_eq!(v.len(), (card_count*2)+1);
+        
+    }
+
+    fn test_a_vectors(card_count: usize) {
+        let v = create_variables(card_count);
+        let (a_L, a_R, a_O) = create_a(&v);
+
+        assert_eq!(a_L.len(), a_R.len());
+        assert_eq!(a_L.len(), a_O.len());
+        assert_eq!(a_L.len()+1, v.len());
+
+        let a = create_weights(card_count);
+
+    }
+
     #[test]
-    fn test_1() {
+    fn test_constants_() {
         test_constants(4);
+    }
+
+    #[test]
+    fn test_variables_() {
+        test_variables(4);
+    }
+
+    #[test]
+    fn test_a_vectors_() {
+        test_a_vectors(4);
     }
 
 }

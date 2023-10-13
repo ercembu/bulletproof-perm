@@ -471,23 +471,15 @@ mod tests {
         let mut H: Vec<RistrettoPoint> = (0..n).map(|_| RistrettoPoint::random(&mut rng)).collect();
         let v: Vec<Scalar> = create_variables(k);
         let mut V: Vec<RistrettoPoint> = commit_variables(&v, &pd_gen);
-        //(0..m).map(|_| RistrettoPoint::random(&mut rng)).collect();
 
         let g = pd_gen.B;
         let h = pd_gen.B_blinding;
 
-        let w_r: Vec<Vec<Scalar>> = (0..n).map(|_| (0..Q).map(|_| Scalar::random(&mut rng)).collect()).collect();
-        let w_l: Vec<Vec<Scalar>> = (0..n).map(|_| (0..Q).map(|_| Scalar::random(&mut rng)).collect()).collect();
-        let w_o: Vec<Vec<Scalar>> = (0..n).map(|_| (0..Q).map(|_| Scalar::random(&mut rng)).collect()).collect();
-
-        let w_v: Vec<Vec<Scalar>> = (0..m).map(|_| (0..Q).map(|_| Scalar::random(&mut rng)).collect()).collect();
+        let (w_r, w_l, w_o, w_v) = create_weights(k);
 
         let c: Vec<Scalar> = create_constants(Q);
 
-        let (a_l, a_r, a_o) = create_a(&v, &c);
-        //let a_l: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
-        //let a_r: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
-        //let a_o: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
+        let (a_l, a_r, a_o) = create_a(&v);
 
         let gamma: Vec<Scalar> = (0..m).map(|_| Scalar::random(&mut rng)).collect();
 
