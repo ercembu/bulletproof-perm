@@ -11,6 +11,12 @@ use crate::poly::{*};
 mod weights;
 use crate::weights::{*};
 
+mod transcript_protocol;
+use crate::transcript_protocol::TranscriptProtocol;
+
+mod circuit_lib;
+use crate::circuit_lib::ACProof;
+
 use alloc::borrow::Borrow;
 use alloc::vec::Vec;
 
@@ -26,179 +32,12 @@ use bulletproofs::ProofError;
 
 
 
-
-///Transcript protocol for merlin
-pub trait TranscriptProtocol {
-    fn arithmetic_domain_sep(&mut self, n: u64);
-
-    fn append_scalar(&mut self, label: &'static [u8], scalar:&Scalar);
-
-    fn append_point(&mut self, label: &'static [u8], point: &CompressedRistretto);
-
-    fn validate_and_append_point(&mut self, label: &'static [u8], point: &CompressedRistretto,) 
-        -> Result<(), ProofError>;
-
-    fn challenge_scalar(&mut self, label: &'static [u8]) -> Scalar;
-}
-
-impl TranscriptProtocol for Transcript {
-    fn arithmetic_domain_sep(&mut self, n: u64) {
-        self.append_message(b"dom-sep", b"acp v1");
-        self.append_u64(b"n", n);
-    }
-
-    fn append_scalar(&mut self, label: &'static [u8], scalar: &Scalar) {
-        self.append_message(label, scalar.as_bytes());
-    }
-
-    fn append_point(&mut self, label: &'static [u8], point: &CompressedRistretto) {
-        self.append_message(label, point.as_bytes());
-    }
-    fn validate_and_append_point(
-                &mut self,
-                label: &'static [u8],
-                point: &CompressedRistretto,
-            ) -> Result<(), ProofError> {
-        use curve25519_dalek_ng::traits::IsIdentity;
-
-        if point.is_identity() {
-            Err(ProofError::VerificationError)
-        } else {
-            Ok(self.append_message(label, point.as_bytes()))
-        }
-    }
-
-    fn challenge_scalar(&mut self, label: &'static [u8]) -> Scalar {
-        let mut buf = [0u8; 64];
-        self.challenge_bytes(label, &mut buf);
-
-        Scalar::from_bytes_mod_order_wide(&buf)
-    }
-
-
-}
-
-#[derive(Clone, Debug)]
-pub struct ArithmeticCircuitProof {
-    L_vec: Vec<Scalar>
-}
-
+/*
 impl ArithmeticCircuitProof {
-    /// Create Permutation Proof Based on Mr. Ke's arithmetic circuits
+    // Create Permutation Proof Based on Mr. Ke's arithmetic circuits
 
-    pub fn create(
-        transcript: &mut Transcript,
-        g: RistrettoPoint,
-        h: RistrettoPoint,
-        G_factors: &Vec<Scalar>,
-        H_factors: &Vec<Scalar>,
-        mut V_vec: Vec<RistrettoPoint>,
-        mut G_vec: Vec<RistrettoPoint>,
-        mut H_vec: Vec<RistrettoPoint>,
-        mut W_L: Vec<Vec<Scalar>>,
-        mut W_R: Vec<Vec<Scalar>>,
-        mut W_O: Vec<Vec<Scalar>>,
-        mut W_V: Vec<Vec<Scalar>>,
-        mut c_vec: Vec<Scalar>,
-        mut a_L_vec: Vec<Scalar>,
-        mut a_R_vec: Vec<Scalar>,
-        mut a_O_vec: Vec<Scalar>,
-        mut gamma: Vec<Scalar>
+    pub fn left() {
 
-    ) -> Result<(), ProofError> {
-
-        let mut V = &mut V_vec[..];
-        let mut G = &mut G_vec[..];
-        let mut H = &mut H_vec[..];
-        let mut c = &mut c_vec[..];
-        let mut a_L = &mut a_L_vec[..];
-        let mut a_R = &mut a_R_vec[..];
-        let mut a_O = &mut a_O_vec[..];
-
-        let mut n = G.len();
-
-        assert_eq!(H.len(), n);
-        assert_eq!(W_L.len(), n);
-        assert_eq!(W_R.len(), n);
-        assert_eq!(W_O.len(), n);
-        assert_eq!(a_L.len(), n);
-        assert_eq!(a_R.len(), n);
-        assert_eq!(a_O.len(), n);
-
-        let mut m = gamma.len();
-
-        assert_eq!(W_V.len(), m);
-
-        let Q = W_L[0].len();
-
-        assert_eq!(W_R[0].len(), Q);
-        assert_eq!(W_L[0].len(), Q);
-        assert_eq!(W_O[0].len(), Q);
-        assert_eq!(W_V[0].len(), Q);
-
-        let mut rng = rand::thread_rng();
-        let mut rng_2 = rand::thread_rng();
-
-        transcript.arithmetic_domain_sep(n as u64);
-
-        let alpha = Scalar::random(&mut rng);
-        let beta = Scalar::random(&mut rng);
-        let ro = Scalar::random(&mut rng);
-
-
-        let A_I = RistrettoPoint::vartime_multiscalar_mul(
-            iter::once(alpha)
-                .chain(a_L.into_iter()
-                                .zip(G_factors.into_iter())
-                                .map(|(a_L_i, g)| &*a_L_i * g)
-                )
-                .chain(a_R.into_iter()
-                                .zip(H_factors.into_iter())
-                                .map(|(a_R_i, h)| &*a_R_i * h)
-                ),
-            iter::once(h) 
-                .chain(G.into_iter().map(|g| *g))
-                .chain(H.into_iter().map(|h| *h))
-        )
-        .compress();
-
-        let A_O = RistrettoPoint::vartime_multiscalar_mul(
-            iter::once(beta)
-                .chain(a_O.into_iter()
-                                .zip(G_factors.into_iter())
-                                .map(|(a_O_i, g)| &*a_O_i * g)
-                ),
-            iter::once(h)
-                .chain(G.into_iter().map(|g| *g))
-        )
-        .compress();
-
-        let s_l: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
-        let s_r: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng_2)).collect();
-
-        let S = RistrettoPoint::vartime_multiscalar_mul(
-            iter::once(ro)
-                .chain(s_l.iter()
-                            .zip(G_factors.into_iter())
-                            .map(|(s_l_i, g)| s_l_i * g)
-                )
-                .chain(s_r.iter()
-                            .zip(H_factors.into_iter())
-                            .map(|(s_r_i, h)| s_r_i * h)
-                ),
-            iter::once(h)
-                .chain(G.into_iter().map(|g| *g))
-                .chain(H.into_iter().map(|h| *h))
-        ).compress();
-        ///First prover done
-        ///P -> V: A_I, A_O, S
-        transcript.append_point(b"A_I", &A_I);
-        transcript.append_point(b"A_O", &A_O);
-        transcript.append_point(b"S", &S);
-
-
-        let y = transcript.challenge_scalar(b"y");
-        let z = transcript.challenge_scalar(b"z");
         ///V -> P: y,z
         //transcript.append_scalar(b"y", &y);
         //transcript.append_scalar(b"z", &z);
@@ -206,11 +45,10 @@ impl ArithmeticCircuitProof {
         ///P and V compute:
         //Figure out how to power Scalars, maybe a trait?
         let mut y_iter = exp_iter(y);
-        let y_n : Vec<Scalar> = iter::once(
-                        Scalar::zero())
-                            .chain((0..n-1)
-                                .map(|_| y_iter.next().unwrap()))
+        let y_n : Vec<Scalar> = (0..n)
+                                .map(|_| y_iter.next().unwrap())
                                 .collect();
+        println!("{}", print_scalar_vec(&y_n));
         let y_n_inv :Vec<Scalar> = y_n.iter()
                                         .map(|k| k.invert())
                                         .collect();
@@ -402,9 +240,9 @@ impl ArithmeticCircuitProof {
             [g, h]
         );
 
-        //if gt_htau != gt_htau_cand {
-        //    return Err(ProofError::VerificationError);
-        //}
+        if gt_htau != gt_htau_cand {
+            return Err(ProofError::VerificationError);
+        }
 
 
         let neg_y_n: Vec<Scalar> = y_n.iter().map(|i| -i).collect();
@@ -432,9 +270,9 @@ impl ArithmeticCircuitProof {
                 .chain(H.iter().map(|i| *i))
         );
 
-        //if P != cand_P {
-        //    return Err(ProofError::VerificationError);
-        //}
+        if P != cand_P {
+            return Err(ProofError::VerificationError);
+        }
 
         Ok(())
 
@@ -443,6 +281,7 @@ impl ArithmeticCircuitProof {
 
     }
 }
+*/
 
 #[cfg(test)]
 mod tests {
@@ -464,7 +303,7 @@ mod tests {
 
         let G_factors: Vec<Scalar> = (0..n).map(|_| Scalar::one()).collect();
 
-        let rand_chal = exp_iter(Scalar::random(&mut rng));
+        let rand_chal = exp_iter(&Scalar::random(&mut rng));
         let H_factors: Vec<Scalar> = rand_chal.take(n).collect();
 
         let mut G: Vec<RistrettoPoint> = (0..n).map(|_| RistrettoPoint::random(&mut rng)).collect();
@@ -483,26 +322,32 @@ mod tests {
 
         let gamma: Vec<Scalar> = (0..m).map(|_| Scalar::random(&mut rng)).collect();
 
-        let proof = ArithmeticCircuitProof::create(
-                                                &mut trans,
-                                                g,
-                                                h,
-                                                &G_factors,
-                                                &H_factors,
-                                                V.clone(),
-                                                G.clone(),
-                                                H.clone(),
-                                                w_r.clone(),
-                                                w_l.clone(),
-                                                w_o.clone(),
-                                                w_v.clone(),
-                                                c.clone(),
-                                                a_l.clone(),
-                                                a_r.clone(),
-                                                a_o.clone(),
-                                                gamma.clone()
-                                            );
-        assert!(proof.is_ok());
+        let ace = ACProof::ACEssentials {
+            g_base: g,
+            h_base: h,
+            G_factors: G_factors,
+            H_factors: H_factors,
+            G_vec: G.clone(),
+            H_vec: H.clone(),
+            W_L: w_l.clone(),
+            W_R: w_r.clone(),
+            W_O: w_o.clone(),
+            W_V: w_v.clone(),
+            c_vec: c.clone(),
+            ..Default::default()
+        };
+
+        let prover = ACProof::ACProver {
+            a_L: a_l.clone(),
+            a_R: a_r.clone(),
+            a_O: a_o.clone(),
+            gamma: gamma.clone(),
+            ..Default::default()
+        };
+
+        let proof = ACProof::ArithmeticCircuitProof::create(&mut trans, ace.clone(), prover.clone());
+        let (x, y) = proof.challenge_wit_and_const(&mut trans);
+        //assert!(proof.is_ok());
 
     }
 

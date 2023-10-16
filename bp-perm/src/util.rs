@@ -59,9 +59,8 @@ pub fn lm_mult(a: &[Scalar], b: &Vec<Vec<Scalar>>) -> Vec<Scalar> {
     vm_mult(&m, b)
 }
 
-pub fn exp_iter(x:Scalar) -> ScalarExp {
-    let next_exp_x = Scalar::one();
-    ScalarExp { x, next_exp_x }
+pub fn exp_iter(x:&Scalar) -> ScalarExp {
+    ScalarExp { x: Scalar::one(), next_exp_x: x.clone() }
 }
 
 pub fn scalar_exp_u(x: &Scalar, pow: usize) -> Scalar {
@@ -114,6 +113,7 @@ impl Iterator for ScalarExp {
     fn next(&mut self) -> Option<Scalar> {
         let exp_x = self.next_exp_x;
         self.next_exp_x *= self.x;
+        self.x = exp_x;
         Some(exp_x)
     }
 
