@@ -19,6 +19,22 @@ pub mod ACProof {
     use crate::util::{*};
     use crate::poly::{*};
     
+    pub trait Storable {
+        fn store(&self, prover: &mut ACProver, label:String);
+    }
+
+    impl Storable for Scalar {
+        fn store(&self, prover: &mut ACProver, label: String) {
+            prover.scalar_map.insert(label, self.clone());
+        }
+    }
+    
+    impl Storable for RistrettoPoint {
+        fn store(&self, prover: &mut ACProver, label: String) {
+            prover.point_map.insert(label, self.clone());
+        }
+    }
+
     #[derive(Clone, Debug, Default)]
     pub struct ACEssentials {
         pub g_base: RistrettoPoint,
@@ -230,7 +246,9 @@ pub mod ACProof {
 
             let sigma_y_z = inner_product(&l_in, &z_W_L);
 
-            //TODO: Create a dump for prover for storage and quick access
+            sigma_y_z.store(&mut self.prover_, "y_n".to_string());
+
+            //TODO: implement trait for storing getting 
 
             (y_n, z_q, sigma_y_z)
         }
