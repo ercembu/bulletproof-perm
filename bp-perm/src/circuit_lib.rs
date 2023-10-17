@@ -35,6 +35,18 @@ pub mod ACProof {
         }
     }
 
+    impl Storable for Vec<Scalar> {
+        fn store(&self, prover: &mut ACProver, label: String) {
+            prover.vec_scalar_map.insert(label, self.clone());
+        }
+    }
+
+    impl Storable for Vec<RistrettoPoint> {
+        fn store(&self, prover: &mut ACProver, label: String) {
+            prover.vec_point_map.insert(label, self.clone());
+        }
+    }
+
     #[derive(Clone, Debug, Default)]
     pub struct ACEssentials {
         pub g_base: RistrettoPoint,
@@ -61,6 +73,8 @@ pub mod ACProof {
         pub gamma: Vec<Scalar>,
         pub scalar_map: HashMap<String, Scalar>,
         pub point_map: HashMap<String, RistrettoPoint>,
+        pub vec_scalar_map: HashMap<String, Vec<Scalar>>,
+        pub vec_point_map: HashMap<String, Vec<RistrettoPoint>>,
             
     }
 
@@ -72,6 +86,40 @@ pub mod ACProof {
 
     impl ArithmeticCircuitProof {
 
+        pub fn get_scalar(
+            &mut self,
+            label: &str,
+        ) -> &Scalar {
+            self.prover_.scalar_map.get(&String::from(label)).unwrap()
+        }
+
+        pub fn get_point(
+            &mut self,
+            label: &str
+        ) -> &RistrettoPoint {
+            self.prover_.point_map.get(&String::from(label)).unwrap()
+        }
+
+        pub fn get_vec_scalar(
+            &mut self,
+            label: &str,
+        ) -> &Vec<Scalar> {
+            self.prover_.vec_scalar_map.get(&String::from(label)).unwrap()
+        }
+
+        pub fn get_vec_point(
+            &mut self,
+            label: &str,
+        ) -> &Vec<RistrettoPoint> {
+            self.prover_.vec_point_map.get(&String::from(label)).unwrap()
+        }
+
+        pub fn challenge_wit_and_const(
+            &self, 
+            trans: &mut Transcript
+        ) -> (Scalar, Scalar) {
+            (trans.challenge_scalar(b"y"), trans.challenge_scalar(b"z"))
+        }
         pub fn create(
             trans: &mut Transcript,
             core: ACEssentials,
@@ -132,8 +180,7 @@ pub mod ACProof {
                 iter::once(core.h_base) 
                     .chain(G.into_iter().map(|g| *g))
                     .chain(H.into_iter().map(|h| *h))
-            )
-            .compress();
+            );
 
             let A_O = RistrettoPoint::vartime_multiscalar_mul(
                 iter::once(beta)
@@ -143,8 +190,7 @@ pub mod ACProof {
                     ),
                 iter::once(core.h_base)
                     .chain(G.into_iter().map(|g| *g))
-            )
-            .compress();
+            );
 
             //Blinding vectors
             let s_l: Vec<Scalar> = (0..n).map(|_| Scalar::random(&mut rng)).collect();
@@ -163,51 +209,27 @@ pub mod ACProof {
                 iter::once(core.h_base)
                     .chain(G.into_iter().map(|g| *g))
                     .chain(H.into_iter().map(|h| *h))
-            ).compress();
+            );
             ///P -> V: A_I, A_O, S
-            trans.append_point(b"A_I", &A_I);
-            trans.append_point(b"A_O", &A_O);
-            trans.append_point(b"S", &S);
+            trans.append_point(b"A_I", &A_I.compress());
+            trans.append_point(b"A_O", &A_O.compress());
+            trans.append_point(b"S", &S.compress());
 
-            ArithmeticCircuitProof{core, prover_: prover}
+            ///TODO: think about fixing this, get mut
+            let mut mut_prov = prover.clone();
+
+            A_I.store(&mut mut_prov, "A_I".to_string());
+            A_O.store(&mut mut_prov, "A_O".to_string());
+            S.store(&mut mut_prov, "S".to_string());
+            s_l.store(&mut mut_prov, "s_l".to_string());
+            s_r.store(&mut mut_prov, "s_r".to_string());
+
+
+
+            ArithmeticCircuitProof{core, prover_: mut_prov}
             
         }
 
-        pub fn store_point(
-            &mut self,
-            label: &str,
-            point: RistrettoPoint
-        ) {
-            self.prover_.point_map.insert(String::from(label), point);
-        }
-        pub fn store_scalar(
-            &mut self,
-            label: &str,
-            scalar: Scalar
-        ) {
-            self.prover_.scalar_map.insert(String::from(label), scalar);
-        }
-
-        pub fn get_scalar(
-            &mut self,
-            label: &str,
-        ) -> &Scalar {
-            self.prover_.scalar_map.get(&String::from(label)).unwrap()
-        }
-
-        pub fn get_point(
-            &mut self,
-            label: &str
-        ) -> &RistrettoPoint {
-            self.prover_.point_map.get(&String::from(label)).unwrap()
-        }
-
-        pub fn challenge_wit_and_const(
-            &self, 
-            trans: &mut Transcript
-        ) -> (Scalar, Scalar) {
-            (trans.challenge_scalar(b"y"), trans.challenge_scalar(b"z"))
-        }
 
         pub fn compute_per_challenges(
             &mut self,
@@ -246,42 +268,49 @@ pub mod ACProof {
 
             let sigma_y_z = inner_product(&l_in, &z_W_L);
 
-            sigma_y_z.store(&mut self.prover_, "y_n".to_string());
+            y_n_inv.store(&mut self.prover_, "y_n_inv".to_string());
+            z_W_R.store(&mut self.prover_, "z_w_r".to_string());
+            l_in.store(&mut self.prover_, "l_in".to_string());
+            z_W_L.store(&mut self.prover_, "z_w_l".to_string());
 
-            //TODO: implement trait for storing getting 
+
 
             (y_n, z_q, sigma_y_z)
         }
 
         pub fn commit_Ts(
                 &mut self, 
+                transcript: &mut Transcript,
                 y_n: &Vec<Scalar>, 
                 z_q: &Vec<Scalar>, 
                 sigma_y_z: &Scalar
         ) -> Vec<CompressedRistretto> {
             ///P computes:
             ///L(X)
-            /*
-            let mut l_x: VecPoly3 = VecPoly3::zero(n);
-            l_x.1 = self.prover_.a_L.into_iter()
+            let mut l_x: VecPoly3 = VecPoly3::zero(self.core.n);
+            let l_in = self.get_vec_scalar("l_in").clone();
+            l_x.1 = self.prover_.a_L.iter()
                 .zip(l_in.iter())
                 .map(|(k, l)| *k + l)
                 .collect();
-            l_x.2 = self.prover_.a_O.into_iter().map(|k| *k).collect();
-            l_x.3 = s_l.into_iter().map(|k| k).collect();
+            l_x.2 = self.prover_.a_O.iter().map(|k| *k).collect();
+
+            let s_l = self.get_vec_scalar("s_l");
+            l_x.3 = s_l.iter().map(|k| *k).collect();
 
             ///R(X)
-            let mut r_x: VecPoly3 = VecPoly3::zero(n);
-            r_x.0 = vm_mult(&z_q, &W_O).iter()
+            let mut r_x: VecPoly3 = VecPoly3::zero(self.core.n);
+            r_x.0 = vm_mult(&z_q, &self.core.W_O).iter()
                 .zip(y_n.iter())
                 .map(|(k,l)| k - l)
                 .collect();
-            r_x.1 = hadamard_V(&y_n, &a_R.to_vec())
+            r_x.1 = hadamard_V(&y_n, &self.prover_.a_R.to_vec())
                 .iter()
                 .zip(
-                    vm_mult(&z_q, &W_L)
+                    vm_mult(&z_q, &self.core.W_L)
                     .iter())
                 .map(|(k,l)| k + l).collect();
+            let s_r = self.get_vec_scalar("s_r");
             r_x.3 = hadamard_V(&y_n, &s_r)
                 .into_iter()
                 .map(|k| k).collect();
@@ -289,9 +318,9 @@ pub mod ACProof {
             ///T(X)
             let t_x = VecPoly3::special_inner_product(&l_x, &r_x);
 
-            let wl = mv_mult(&W_L, &(a_L.to_vec()));
-            let wr = mv_mult(&W_R, &(a_R.to_vec()));
-            let wo = mv_mult(&W_O, &(a_O.to_vec()));
+            let wl = mv_mult(&self.core.W_L, &(self.prover_.a_L.to_vec()));
+            let wr = mv_mult(&self.core.W_R, &(self.prover_.a_R.to_vec()));
+            let wo = mv_mult(&self.core.W_O, &(self.prover_.a_O.to_vec()));
 
             let w: Vec<Scalar> = wl.iter()
                 .zip(wr.iter())
@@ -300,18 +329,19 @@ pub mod ACProof {
                 .collect();
 
             //Time for t_2 = d(y,z) + <z_q, c + W_V.v>
-            let input_hadamard_product = inner_product(&a_L.to_vec(), &hadamard_V(&a_R.to_vec(), &y_n));
-            let t_2 = input_hadamard_product + inner_product(&z_q, &w) + sigma_y_z - inner_product(&a_O.to_vec(), &y_n);
+            let input_hadamard_product = inner_product(&self.prover_.a_L.to_vec(), &hadamard_V(&self.prover_.a_R.to_vec(), &y_n));
+            let t_2 = input_hadamard_product + inner_product(&z_q, &w) + sigma_y_z - inner_product(&self.prover_.a_O.to_vec(), &y_n);
 
 
             //P -> V: T_1, T_2, T_3, T_4, T_5, T_6
+            let mut rng = rand::thread_rng();
             let tau_1 = Scalar::random(&mut rng);
             let t_1 = t_x.eval(Scalar::one());
             let T_1: CompressedRistretto = RistrettoPoint::vartime_multiscalar_mul(
                 iter::once(t_1)
                     .chain(iter::once(tau_1))
-                ,iter::once(g)
-                    .chain(iter::once(h))
+                ,iter::once(self.core.g_base)
+                    .chain(iter::once(self.core.h_base))
             ).compress();
             transcript.append_point(b"T1", &T_1);
 
@@ -321,8 +351,8 @@ pub mod ACProof {
             let T_3: CompressedRistretto = RistrettoPoint::vartime_multiscalar_mul(
                 iter::once(t_3)
                     .chain(iter::once(tau_3))
-                ,iter::once(g)
-                    .chain(iter::once(h))
+                ,iter::once(self.core.g_base)
+                    .chain(iter::once(self.core.h_base))
             ).compress();
             transcript.append_point(b"T3", &T_3);
 
@@ -332,8 +362,8 @@ pub mod ACProof {
             let T_4: CompressedRistretto = RistrettoPoint::vartime_multiscalar_mul(
                 iter::once(t_4)
                     .chain(iter::once(tau_4))
-                ,iter::once(g)
-                    .chain(iter::once(h))
+                ,iter::once(self.core.g_base)
+                    .chain(iter::once(self.core.h_base))
             ).compress();
             transcript.append_point(b"T4", &T_3);
 
@@ -343,8 +373,8 @@ pub mod ACProof {
             let T_5: CompressedRistretto = RistrettoPoint::vartime_multiscalar_mul(
                 iter::once(t_5)
                     .chain(iter::once(tau_5))
-                ,iter::once(g)
-                    .chain(iter::once(h))
+                ,iter::once(self.core.g_base)
+                    .chain(iter::once(self.core.h_base))
             ).compress();
             transcript.append_point(b"T5", &T_5);
 
@@ -354,14 +384,12 @@ pub mod ACProof {
             let T_6: CompressedRistretto = RistrettoPoint::vartime_multiscalar_mul(
                 iter::once(t_6)
                     .chain(iter::once(tau_6))
-                ,iter::once(g)
-                    .chain(iter::once(h))
+                ,iter::once(self.core.g_base)
+                    .chain(iter::once(self.core.h_base))
             ).compress();
             transcript.append_point(b"T6", &T_6);
 
-            Vector::from([T_1, T_3, T_4, T_5, T_6])
-            */
-            Vec::new()
+            Vec::from([T_1, T_3, T_4, T_5, T_6])
         }
         
     }

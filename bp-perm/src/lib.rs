@@ -38,138 +38,6 @@ impl ArithmeticCircuitProof {
 
     pub fn left() {
 
-        ///V -> P: y,z
-        //transcript.append_scalar(b"y", &y);
-        //transcript.append_scalar(b"z", &z);
-
-        ///P and V compute:
-        //Figure out how to power Scalars, maybe a trait?
-        let mut y_iter = exp_iter(y);
-        let y_n : Vec<Scalar> = (0..n)
-                                .map(|_| y_iter.next().unwrap())
-                                .collect();
-        println!("{}", print_scalar_vec(&y_n));
-        let y_n_inv :Vec<Scalar> = y_n.iter()
-                                        .map(|k| k.invert())
-                                        .collect();
-
-        let mut z_iter = exp_iter(z);
-        let z_q : Vec<Scalar> = (1..=Q).map(|_| z_iter.next()
-                                        .unwrap())
-                                        .collect();
-
-
-
-        ///left of inner product
-        let z_W_R = vm_mult(&z_q, &W_R);
-        let l_in = hadamard_V(&y_n_inv, &z_W_R);
-
-        ///right of inner product
-        let z_W_L = vm_mult(&z_q, &W_L);
-
-        let sigma_y_z = inner_product(&l_in, &z_W_L);
-
-        ///P computes:
-        ///L(X)
-        let mut l_x: VecPoly3 = VecPoly3::zero(n);
-        l_x.1 = a_L.into_iter()
-            .zip(l_in.iter())
-            .map(|(k, l)| *k + l)
-            .collect();
-        l_x.2 = a_O.into_iter().map(|k| *k).collect();
-        l_x.3 = s_l.into_iter().map(|k| k).collect();
-
-        ///R(X)
-        let mut r_x: VecPoly3 = VecPoly3::zero(n);
-        r_x.0 = vm_mult(&z_q, &W_O).iter()
-            .zip(y_n.iter())
-            .map(|(k,l)| k - l)
-            .collect();
-        r_x.1 = hadamard_V(&y_n, &a_R.to_vec())
-            .iter()
-            .zip(
-                vm_mult(&z_q, &W_L)
-                .iter())
-            .map(|(k,l)| k + l).collect();
-        r_x.3 = hadamard_V(&y_n, &s_r)
-            .into_iter()
-            .map(|k| k).collect();
-
-        ///T(X)
-        let t_x = VecPoly3::special_inner_product(&l_x, &r_x);
-
-        let wl = mv_mult(&W_L, &(a_L.to_vec()));
-        let wr = mv_mult(&W_R, &(a_R.to_vec()));
-        let wo = mv_mult(&W_O, &(a_O.to_vec()));
-
-        let w: Vec<Scalar> = wl.iter()
-            .zip(wr.iter())
-            .zip(wo.iter())
-            .map(|((l, r), o)| l+r+o)
-            .collect();
-
-        //Time for t_2 = d(y,z) + <z_q, c + W_V.v>
-        let input_hadamard_product = inner_product(&a_L.to_vec(), &hadamard_V(&a_R.to_vec(), &y_n));
-        let t_2 = input_hadamard_product + inner_product(&z_q, &w) + sigma_y_z - inner_product(&a_O.to_vec(), &y_n);
-
-
-        //P -> V: T_1, T_2, T_3, T_4, T_5, T_6
-        let tau_1 = Scalar::random(&mut rng);
-        let t_1 = t_x.eval(Scalar::one());
-        let T_1: CompressedRistretto = RistrettoPoint::vartime_multiscalar_mul(
-            iter::once(t_1)
-                .chain(iter::once(tau_1))
-            ,iter::once(g)
-                .chain(iter::once(h))
-        ).compress();
-        transcript.append_point(b"T1", &T_1);
-
-        let tau_3 = Scalar::random(&mut rng);
-        let three = Scalar::one() + Scalar::one() + Scalar::one();
-        let t_3 = t_x.eval(three);
-        let T_3: CompressedRistretto = RistrettoPoint::vartime_multiscalar_mul(
-            iter::once(t_3)
-                .chain(iter::once(tau_3))
-            ,iter::once(g)
-                .chain(iter::once(h))
-        ).compress();
-        transcript.append_point(b"T3", &T_3);
-
-        let tau_4 = Scalar::random(&mut rng);
-        let four = three + Scalar::one();
-        let t_4 = t_x.eval(four);
-        let T_4: CompressedRistretto = RistrettoPoint::vartime_multiscalar_mul(
-            iter::once(t_4)
-                .chain(iter::once(tau_4))
-            ,iter::once(g)
-                .chain(iter::once(h))
-        ).compress();
-        transcript.append_point(b"T4", &T_3);
-
-        let tau_5 = Scalar::random(&mut rng);
-        let five = four + Scalar::one();
-        let t_5 = t_x.eval(five);
-        let T_5: CompressedRistretto = RistrettoPoint::vartime_multiscalar_mul(
-            iter::once(t_5)
-                .chain(iter::once(tau_5))
-            ,iter::once(g)
-                .chain(iter::once(h))
-        ).compress();
-        transcript.append_point(b"T5", &T_5);
-
-        let tau_6 = Scalar::random(&mut rng);
-        let six = five + Scalar::one();
-        let t_6 = t_x.eval(six);
-        let T_6: CompressedRistretto = RistrettoPoint::vartime_multiscalar_mul(
-            iter::once(t_6)
-                .chain(iter::once(tau_6))
-            ,iter::once(g)
-                .chain(iter::once(h))
-        ).compress();
-        transcript.append_point(b"T6", &T_6);
-
-        let Ts = [T_1, T_3, T_4, T_5, T_6];
-
         //V: x <- Z
         let x = transcript.challenge_scalar(b"x");
 
@@ -345,8 +213,12 @@ mod tests {
             ..Default::default()
         };
 
-        let proof = ACProof::ArithmeticCircuitProof::create(&mut trans, ace.clone(), prover.clone());
-        let (x, y) = proof.challenge_wit_and_const(&mut trans);
+        let mut proof = ACProof::ArithmeticCircuitProof::create(&mut trans, ace.clone(), prover.clone());
+        let (y, z) = proof.challenge_wit_and_const(&mut trans);
+
+        let (y_n, z_q, sigma_y_z) = proof.compute_per_challenges(&y, &z);
+
+        let tem = proof.commit_Ts(&mut trans, &y_n, &z_q, &sigma_y_z);
         //assert!(proof.is_ok());
 
     }
