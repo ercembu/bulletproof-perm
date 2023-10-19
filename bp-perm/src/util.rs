@@ -1,4 +1,5 @@
 use curve25519_dalek_ng::scalar::Scalar;
+use ethnum::{U256, I256};
 
 ///Util functions
 
@@ -99,6 +100,30 @@ pub fn give_n(n: i64) -> Scalar {
     }
 
     zero
+}
+pub fn print_scalar_vec(v: &Vec<Scalar>) -> String {
+    let mut result: String = String::from("[");
+    for scalar in v {
+        let mut sc_str = I256::from_le_bytes(*scalar.as_bytes()).to_string();
+        if sc_str.len() > 10 { sc_str = String::from("-1");}
+        result += &sc_str;
+        result.push_str(", ");
+    }
+    result.push_str("]");
+
+    result
+    
+}
+pub fn print_scalar_mat(m: &Vec<Vec<Scalar>>) -> String {
+    let mut result: String = String::from("[");
+    for v in m {
+        result.push_str(print_scalar_vec(&v).as_str());
+        result.push_str(",\n");
+    }
+    result.push_str("]");
+
+    result
+
 }
 
 /// Iterator for Scalar exponentiation

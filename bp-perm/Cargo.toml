@@ -13,3 +13,4 @@ rand = {version = "*"}
 sha3 = {version="*"}
 shuffle = {version="*"}
 ethnum = {version="*"}
+bytevec = {version="*"}

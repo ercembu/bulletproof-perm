@@ -18,6 +18,7 @@ impl Poly6 {
 }
 
 
+#[derive(Clone, Debug, Default)]
 pub struct VecPoly3(
     pub Vec<Scalar>,
     pub Vec<Scalar>,
@@ -61,5 +62,16 @@ impl VecPoly3 {
             out[i] = self.0[i] + x * (self.1[i] + x * (self.2[i] + x * self.3[i]));
         }
         out
+    }
+
+    pub fn eval_ref(&self, x: &Scalar) -> Vec<Scalar> {
+        let n = self.0.len();
+        let mut out = vec![Scalar::zero(); n];
+        
+        for i in 0..n {
+            out[i] = self.0[i] + x * (self.1[i] + x * (self.2[i] + x * self.3[i]));
+        }
+        out
+
     }
 }

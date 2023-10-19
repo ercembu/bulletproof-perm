@@ -4,6 +4,8 @@ use curve25519_dalek_ng::ristretto::{CompressedRistretto, RistrettoPoint};
 use curve25519_dalek_ng::scalar::Scalar;
 use merlin::Transcript;
 use bulletproofs::ProofError;
+use bytevec::ByteEncodable;
+use ethnum::{U256, I256};
 
 extern crate alloc;
 ///Transcript protocol for merlin
@@ -11,6 +13,7 @@ pub trait TranscriptProtocol {
     fn arithmetic_domain_sep(&mut self, n: u64);
 
     fn append_scalar(&mut self, label: &'static [u8], scalar:&Scalar);
+    fn append_vec_scalar(&mut self, label: &'static [u8], scalars: &Vec<Scalar>); 
 
     fn append_point(&mut self, label: &'static [u8], point: &CompressedRistretto);
 
@@ -28,6 +31,15 @@ impl TranscriptProtocol for Transcript {
 
     fn append_scalar(&mut self, label: &'static [u8], scalar: &Scalar) {
         self.append_message(label, scalar.as_bytes());
+    }
+
+    fn append_vec_scalar(&mut self, label: &'static [u8], scalars: &Vec<Scalar>) {
+    //I256::from_le_bytes(*scalar.as_bytes()).to_string();    
+    let temp_vec: Vec<String> = scalars
+                        .iter()
+                        .map(|x| I256::from_le_bytes(*x.as_bytes()).to_string())
+                        .collect();
+        self.append_message(label, &temp_vec.encode::<u64>().unwrap());
     }
 
     fn append_point(&mut self, label: &'static [u8], point: &CompressedRistretto) {

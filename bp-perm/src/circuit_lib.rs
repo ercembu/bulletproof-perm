@@ -5,6 +5,7 @@ pub mod ACProof {
     use alloc::borrow::Borrow;
     use alloc::vec::Vec;
 
+
     use core::iter;
     use std::collections::HashMap;
     use curve25519_dalek_ng::ristretto::{CompressedRistretto, RistrettoPoint};
@@ -20,32 +21,39 @@ pub mod ACProof {
     use crate::poly::{*};
     
     pub trait Storable {
-        fn store(&self, prover: &mut ACProver, label:String);
+        fn store(&self, prover: &mut ACProver, label:&str);
     }
 
     impl Storable for Scalar {
-        fn store(&self, prover: &mut ACProver, label: String) {
-            prover.scalar_map.insert(label, self.clone());
+        fn store(&self, prover: &mut ACProver, label: &str) {
+            prover.scalar_map.insert(label.to_string(), self.clone());
         }
     }
     
     impl Storable for RistrettoPoint {
-        fn store(&self, prover: &mut ACProver, label: String) {
-            prover.point_map.insert(label, self.clone());
+        fn store(&self, prover: &mut ACProver, label: &str) {
+            prover.point_map.insert(label.to_string(), self.clone());
         }
     }
 
     impl Storable for Vec<Scalar> {
-        fn store(&self, prover: &mut ACProver, label: String) {
-            prover.vec_scalar_map.insert(label, self.clone());
+        fn store(&self, prover: &mut ACProver, label: &str) {
+            prover.vec_scalar_map.insert(label.to_string(), self.clone());
         }
     }
 
     impl Storable for Vec<RistrettoPoint> {
-        fn store(&self, prover: &mut ACProver, label: String) {
-            prover.vec_point_map.insert(label, self.clone());
+        fn store(&self, prover: &mut ACProver, label: &str) {
+            prover.vec_point_map.insert(label.to_string(), self.clone());
         }
     }
+
+    impl Storable for VecPoly3 {
+        fn store(&self, prover: &mut ACProver, label: &str) {
+            prover.poly_map.insert(label.to_string(), self.clone());
+        }
+    }
+
 
     #[derive(Clone, Debug, Default)]
     pub struct ACEssentials {
@@ -75,6 +83,7 @@ pub mod ACProof {
         pub point_map: HashMap<String, RistrettoPoint>,
         pub vec_scalar_map: HashMap<String, Vec<Scalar>>,
         pub vec_point_map: HashMap<String, Vec<RistrettoPoint>>,
+        pub poly_map: HashMap<String, VecPoly3>,
             
     }
 
@@ -112,6 +121,13 @@ pub mod ACProof {
             label: &str,
         ) -> &Vec<RistrettoPoint> {
             self.prover_.vec_point_map.get(&String::from(label)).unwrap()
+        }
+
+        pub fn get_vec_poly(
+            &mut self,
+            label: &str,
+        ) -> &VecPoly3 {
+            self.prover_.poly_map.get(&String::from(label)).unwrap()
         }
 
         pub fn challenge_wit_and_const(
@@ -166,6 +182,7 @@ pub mod ACProof {
             let ro = Scalar::random(&mut rng);
 
 
+
             //Commitments to inputs and outputs
             let A_I = RistrettoPoint::vartime_multiscalar_mul(
                 iter::once(alpha)
@@ -218,11 +235,16 @@ pub mod ACProof {
             ///TODO: think about fixing this, get mut
             let mut mut_prov = prover.clone();
 
-            A_I.store(&mut mut_prov, "A_I".to_string());
-            A_O.store(&mut mut_prov, "A_O".to_string());
-            S.store(&mut mut_prov, "S".to_string());
-            s_l.store(&mut mut_prov, "s_l".to_string());
-            s_r.store(&mut mut_prov, "s_r".to_string());
+            alpha.store(&mut mut_prov, "alpha");
+            beta.store(&mut mut_prov, "beta");
+            ro.store(&mut mut_prov, "ro");
+
+
+            A_I.store(&mut mut_prov, "A_I");
+            A_O.store(&mut mut_prov, "A_O");
+            S.store(&mut mut_prov, "S");
+            s_l.store(&mut mut_prov, "s_l");
+            s_r.store(&mut mut_prov, "s_r");
 
 
 
@@ -268,10 +290,11 @@ pub mod ACProof {
 
             let sigma_y_z = inner_product(&l_in, &z_W_L);
 
-            y_n_inv.store(&mut self.prover_, "y_n_inv".to_string());
-            z_W_R.store(&mut self.prover_, "z_w_r".to_string());
-            l_in.store(&mut self.prover_, "l_in".to_string());
-            z_W_L.store(&mut self.prover_, "z_w_l".to_string());
+            y_n_inv.store(&mut self.prover_, "y_n_inv");
+            z_W_R.store(&mut self.prover_, "z_w_r");
+            l_in.store(&mut self.prover_, "l_in");
+            z_W_L.store(&mut self.prover_, "z_w_l");
+            y_n.store(&mut self.prover_, "y_n");
 
 
 
@@ -389,7 +412,173 @@ pub mod ACProof {
             ).compress();
             transcript.append_point(b"T6", &T_6);
 
+            let taus: Vec<Scalar> = vec![tau_1, tau_3, tau_4, tau_5, tau_6];
+
+            taus.store(&mut self.prover_, "taus");
+
+            l_x.store(&mut self.prover_, "l_x");
+            r_x.store(&mut self.prover_, "r_x");
+
             Vec::from([T_1, T_3, T_4, T_5, T_6])
+        }
+
+        pub fn random_chall_x(
+            &self,
+            transcript: &mut Transcript,
+        ) -> Scalar {
+            //V: x <- Z
+            transcript.challenge_scalar(b"x")
+            //V -> P: x
+        }
+
+        pub fn blinding_values(
+            &mut self,
+            transcript: &mut Transcript,
+            x: &Scalar,
+            z_q: &Vec<Scalar>,
+        ) {
+            //P computes:
+            let l = self.get_vec_poly("l_x").eval_ref(x);
+            let r = self.get_vec_poly("r_x").eval_ref(x);
+
+            let t = inner_product(&l, &r);
+
+            let mut tau_x = Scalar::zero();
+
+            let taus = self.get_vec_scalar("taus").clone();
+
+            let W_V = self.core.W_V.clone();
+            let gamma = self.prover_.gamma.clone();
+            tau_x += (taus[0] * x) + x * x * inner_product(&z_q, &mv_mult(&W_V, &gamma));
+            tau_x += (taus[1] * scalar_exp(&x, 3)) + x * x * inner_product(&z_q, &mv_mult(&W_V, &gamma));
+            tau_x += (taus[2] * scalar_exp(&x, 4)) + x * x * inner_product(&z_q, &mv_mult(&W_V, &gamma));
+            tau_x += (taus[3] * scalar_exp(&x, 5)) + x * x * inner_product(&z_q, &mv_mult(&W_V, &gamma));
+            tau_x += (taus[4] * scalar_exp(&x, 6)) + x * x * inner_product(&z_q, &mv_mult(&W_V, &gamma));
+
+            let alpha = self.get_scalar("alpha").clone();
+            let beta = self.get_scalar("beta").clone();
+            let ro = self.get_scalar("ro").clone();
+
+            let mu = alpha * x + beta * scalar_exp(&x, 2) + ro * scalar_exp(&x, 3);
+            //P -> V: tau_x, mu, t, l, r
+            transcript.append_scalar(b"TX", &tau_x);
+            transcript.append_scalar(b"mu", &mu);
+            transcript.append_vec_scalar(b"l", &l);
+            transcript.append_vec_scalar(b"r", &r);
+            transcript.append_scalar(b"t", &t);
+
+            mu.store(&mut self.prover_, "mu");
+
+            l.store(&mut self.prover_, "l");
+            r.store(&mut self.prover_, "r");
+            t.store(&mut self.prover_, "t");
+            tau_x.store(&mut self.prover_, "TX");
+        }
+
+        pub fn verify(
+            &mut self,
+            transcript: &mut Transcript,
+            z_q: &Vec<Scalar>,
+            sigma_y_z: &Scalar,
+            x: &Scalar,
+            V: &Vec<RistrettoPoint>,
+            Ts: &Vec<CompressedRistretto>,
+
+        ) -> Result<(), ProofError> {
+            
+            let y_n_inv = self.get_vec_scalar("y_n_inv").clone();
+            //V computes and checks
+            let h_: Vec<RistrettoPoint> = y_n_inv.iter().zip(self.core.H_vec.iter()).map(|(y, h)| *h * y).collect();
+            //find W_L z_W_L
+            //find W_R z_W_R
+            //find W_0
+            //then the checks
+            //
+            let z_W_L = self.get_vec_scalar("z_w_l").clone();
+            let weights_L: RistrettoPoint = RistrettoPoint::vartime_multiscalar_mul(
+                z_W_L.into_iter(),
+                h_.iter()
+            );
+
+            let l_in = self.get_vec_scalar("l_in").clone();
+            let weights_R: RistrettoPoint = RistrettoPoint::vartime_multiscalar_mul(
+                l_in.iter(),
+                self.core.G_vec.iter().map(|g| *g)
+            );
+
+            let weights_O: RistrettoPoint = RistrettoPoint::vartime_multiscalar_mul(
+                vm_mult(z_q, &self.core.W_O).iter(),
+                h_.iter()
+            );
+            //Check if t holds with sent data
+            let l = self.get_vec_scalar("l").clone();
+            let r = self.get_vec_scalar("r").clone();
+            let t = self.get_scalar("t").clone();
+
+            if t != inner_product(&l, &r) {
+                return Err(ProofError::VerificationError);
+            } 
+            let g_exp = scalar_exp(&x, 2) * (inner_product(&z_q, &self.core.c_vec) + sigma_y_z);
+            let v_exp = vm_mult(&z_q, &self.core.W_V).into_iter().map(|i| scalar_exp(&x, 2) * i);
+            let t_exp = iter::once(*x).chain((3..=6).map(|i| scalar_exp(&x, i))); 
+
+            let gt_htau_cand: RistrettoPoint = RistrettoPoint::vartime_multiscalar_mul(
+                iter::once(g_exp)
+                    .chain(v_exp)
+                    .chain(t_exp)
+                ,
+                iter::once(self.core.g_base)
+                    .chain(V.iter().map(|v| *v))
+                    .chain(Ts.iter().map(|t| t.decompress().unwrap()))
+            );
+            let tau_x = self.get_scalar("TX").clone();
+            let gt_htau: RistrettoPoint = RistrettoPoint::vartime_multiscalar_mul(
+                [t, tau_x],
+                [self.core.g_base, self.core.h_base]
+            );
+
+            /*
+            if gt_htau != gt_htau_cand {
+                //IT ALREADY FAILS HERE TODO
+                return Err(ProofError::VerificationError);
+            }*/
+            let y_n = self.get_vec_scalar("y_n").clone();
+
+            let A_I = self.get_point("A_I").clone();
+            let A_O = self.get_point("A_O").clone();
+            let S = self.get_point("S").clone();
+
+            let neg_y_n: Vec<Scalar> = y_n.iter().map(|i| -i).collect();
+            let P: RistrettoPoint = RistrettoPoint::vartime_multiscalar_mul(
+                [x.clone(), scalar_exp(&x, 2)].iter()
+                    .chain(
+                        neg_y_n.iter()
+                    ).chain(
+                        [x.clone(), x.clone(), Scalar::one(), scalar_exp(&x, 3)].iter()
+                    ),
+                [A_I, A_O].iter()
+                    .chain(
+                        h_.iter()
+                    ).chain(
+                        [weights_L, weights_R, weights_O, S].iter()
+                    )
+            );
+
+            let mu = self.get_scalar("mu").clone();
+            let cand_P: RistrettoPoint = RistrettoPoint::vartime_multiscalar_mul(
+                iter::once(mu)
+                    .chain(l.into_iter())
+                    .chain(r.into_iter()),
+                iter::once(self.core.h_base)
+                    .chain(self.core.G_vec.iter().map(|i| *i))
+                    .chain(self.core.H_vec.iter().map(|i| *i))
+            );
+
+            if P != cand_P {
+                return Err(ProofError::VerificationError);
+            }
+
+            Ok(())
         }
         
     }

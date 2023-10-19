@@ -8,40 +8,16 @@ use alloc::vec::Vec;
 use sha3::Sha3_512;
 use shuffle::irs::Irs;
 use std::convert::TryInto;
-use ethnum::{U256, I256};
 
 use core::iter;
 use curve25519_dalek_ng::scalar::Scalar;
 use curve25519_dalek_ng::ristretto::RistrettoPoint;
 use bulletproofs::PedersenGens;
 use crate::util;
+use crate::util::{print_scalar_vec, print_scalar_mat};
 
 use shuffle::shuffler::Shuffler;
 
-pub fn print_scalar_vec(v: &Vec<Scalar>) -> String {
-    let mut result: String = String::from("[");
-    for scalar in v {
-        let mut sc_str = I256::from_le_bytes(*scalar.as_bytes()).to_string();
-        if sc_str.len() > 10 { sc_str = String::from("-1");}
-        result += &sc_str;
-        result.push_str(", ");
-    }
-    result.push_str("]");
-
-    result
-    
-}
-pub fn print_scalar_mat(m: &Vec<Vec<Scalar>>) -> String {
-    let mut result: String = String::from("[");
-    for v in m {
-        result.push_str(print_scalar_vec(&v).as_str());
-        result.push_str(",\n");
-    }
-    result.push_str("]");
-
-    result
-
-}
 
 pub fn create_constants(Q: usize) -> Vec<Scalar> {
 

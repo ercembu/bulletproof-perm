@@ -219,7 +219,13 @@ mod tests {
         let (y_n, z_q, sigma_y_z) = proof.compute_per_challenges(&y, &z);
 
         let tem = proof.commit_Ts(&mut trans, &y_n, &z_q, &sigma_y_z);
-        //assert!(proof.is_ok());
+
+        let XX = proof.random_chall_x(&mut trans);
+
+        proof.blinding_values(&mut trans, &XX, &z_q);
+
+        let ver = proof.verify(&mut trans, &z_q, &sigma_y_z, &XX, &V, &tem);
+        //assert!(ver.is_ok());
 
     }
 
