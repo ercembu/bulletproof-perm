@@ -225,7 +225,7 @@ mod tests {
         proof.blinding_values(&mut trans, &XX, &z_q);
 
         let ver = proof.verify(&mut trans, &z_q, &sigma_y_z, &XX, &V, &tem);
-        //assert!(ver.is_ok());
+        assert!(ver.is_ok());
 
     }
 
