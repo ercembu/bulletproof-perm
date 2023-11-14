@@ -187,12 +187,12 @@ pub mod ACProof {
             let A_I = RistrettoPoint::vartime_multiscalar_mul(
                 iter::once(alpha)
                     .chain(a_L.into_iter()
-                                    .zip(core.G_factors.iter())
-                                    .map(|(a_L_i, g)| &*a_L_i * g)
+                                    //.zip(core.G_factors.iter())
+                                    .map(|a_L_i| *a_L_i)
                     )
                     .chain(a_R.into_iter()
-                                    .zip(core.H_factors.iter())
-                                    .map(|(a_R_i, h)| &*a_R_i * h)
+                                    //.zip(core.H_factors.iter())
+                                    .map(|a_R_i| *a_R_i)
                     ),
                 iter::once(core.h_base) 
                     .chain(G.into_iter().map(|g| *g))
@@ -202,8 +202,8 @@ pub mod ACProof {
             let A_O = RistrettoPoint::vartime_multiscalar_mul(
                 iter::once(beta)
                     .chain(a_O.into_iter()
-                                    .zip(core.G_factors.iter())
-                                    .map(|(a_O_i, g)| &*a_O_i * g)
+                                    //.zip(core.G_factors.iter())
+                                    .map(|a_O_i| *a_O_i)
                     ),
                 iter::once(core.h_base)
                     .chain(G.into_iter().map(|g| *g))
@@ -216,12 +216,12 @@ pub mod ACProof {
             let S = RistrettoPoint::vartime_multiscalar_mul(
                 iter::once(ro)
                     .chain(s_l.iter()
-                                .zip(core.G_factors.iter())
-                                .map(|(s_l_i, g)| s_l_i * g)
+                                //.zip(core.G_factors.iter())
+                                .map(|s_l_i| *s_l_i)
                     )
                     .chain(s_r.iter()
-                                .zip(core.H_factors.iter())
-                                .map(|(s_r_i, h)| s_r_i * h)
+                                //.zip(core.H_factors.iter())
+                                .map(|s_r_i| *s_r_i)
                     ),
                 iter::once(core.h_base)
                     .chain(G.into_iter().map(|g| *g))
@@ -537,11 +537,11 @@ pub mod ACProof {
                 [self.core.g_base, self.core.h_base]
             );
 
-            /*
+            
             if gt_htau != gt_htau_cand {
                 //IT ALREADY FAILS HERE TODO
                 return Err(ProofError::VerificationError);
-            }*/
+            }
             let y_n = self.get_vec_scalar("y_n").clone();
 
             let A_I = self.get_point("A_I").clone();

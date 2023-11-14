@@ -177,10 +177,11 @@ mod tests {
         let mut G: Vec<RistrettoPoint> = (0..n).map(|_| RistrettoPoint::random(&mut rng)).collect();
         let mut H: Vec<RistrettoPoint> = (0..n).map(|_| RistrettoPoint::random(&mut rng)).collect();
         let v: Vec<Scalar> = create_variables(k);
-        let mut V: Vec<RistrettoPoint> = commit_variables(&v, &pd_gen);
 
         let g = pd_gen.B;
         let h = pd_gen.B_blinding;
+
+        let mut V: Vec<RistrettoPoint> = commit_variables(&v, &pd_gen);
 
         let (w_r, w_l, w_o, w_v) = create_weights(k);
 
