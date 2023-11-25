@@ -14,3 +14,4 @@ sha3 = {version="*"}
 shuffle = {version="*"}
 ethnum = {version="*"}
 bytevec = {version="*"}
+itertools = {version="*"}

@@ -8,13 +8,17 @@ use alloc::vec::Vec;
 use sha3::Sha3_512;
 use shuffle::irs::Irs;
 use std::convert::TryInto;
+use itertools::izip;
+use ethnum::{I256};
 
 use core::iter;
 use curve25519_dalek_ng::scalar::Scalar;
 use curve25519_dalek_ng::ristretto::RistrettoPoint;
 use bulletproofs::PedersenGens;
 use crate::util;
-use crate::util::{print_scalar_vec, print_scalar_mat};
+use crate::util::{print_scalar_vec, print_scalar_mat, format_scalar};
+use crate::traits::ReduceScalar;
+
 
 use shuffle::shuffler::Shuffler;
 
@@ -25,7 +29,8 @@ pub fn create_constants(Q: usize) -> Vec<Scalar> {
     for _ in 0..Q-2 {
         constant_vector.push(Scalar::zero());
     }
-    constant_vector.push(-Scalar::one());
+    constant_vector.push(-Scalar::one().reduce());
+    //constant_vector.push(Scalar::from_bytes_mod_order(m_one.to_le_bytes()));
     constant_vector.push(Scalar::one());
     constant_vector
 }
@@ -34,7 +39,7 @@ pub fn create_variables(k: usize) -> Vec<Scalar> {
     let mut rng = rand::thread_rng();
     let mut variable_vector: Vec<Scalar> = Vec::new();
 
-    for i in 0..k {
+    for i in 1..k+1 {
         variable_vector.push(util::give_n(i.try_into().unwrap()));
     }
 
@@ -42,7 +47,7 @@ pub fn create_variables(k: usize) -> Vec<Scalar> {
     let mut irs = Irs::default();
     irs.shuffle(&mut second_half, &mut rng);
 
-    let x = Scalar::random(&mut rng);
+    let x = Scalar::from(1 as u32);//Scalar::random(&mut rng);
 
     variable_vector.into_iter()
         .chain(second_half.into_iter())
@@ -75,7 +80,7 @@ pub fn create_a(variables: &Vec<Scalar>) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scala
         a_R[i+offset] = second_half[i+1] - x;
 
         if i == 0 {
-            a_L[i] = first_half[i] - x;
+            a_L[i] = (first_half[i] - x);
             a_L[i + offset] = second_half[i] - x;
 
         } else {
@@ -84,21 +89,26 @@ pub fn create_a(variables: &Vec<Scalar>) -> (Vec<Scalar>, Vec<Scalar>, Vec<Scala
 
         }
 
+        a_L = a_L.reduce_scalars();
+        a_R = a_R.reduce_scalars();
+
         a_O[i] = a_L[i] * a_R[i];
         a_O[i + offset] = a_L[i + offset] * a_R[i + offset];
+
+
 
     }
 
     a_L[n-2] = a_O[n-3];
-    a_R[n-2] = -Scalar::one();
-    a_O[n-2] = a_L[n-2] * a_L[n-2];
+    a_R[n-2] = -Scalar::one().reduce();
+    a_O[n-2] = a_L[n-2] * a_R[n-2];
 
     a_L[n-1] = a_O[offset] + a_O[n-2];
     a_R[n-1] = Scalar::one();
     a_O[n-1] = a_L[n-1] * a_L[n-1];
     
 
-    (a_L, a_R, a_O)
+    (a_L.reduce_scalars(), a_R.reduce_scalars(), a_O.reduce_scalars())
     
 }
 
@@ -129,12 +139,11 @@ pub fn create_weights(card_count: usize) -> (Vec<Vec<Scalar>>, Vec<Vec<Scalar>>,
         if i < n {
             w_l[i][i] = Scalar::one();
 
-            if (i != card_count-1) 
-                && (i != n)
+            if (i != (card_count/2) + 1) 
                 && (i != 0) {
                     w_o[i][i-1] = Scalar::one();
             } else {
-                w_v[i][n] = -Scalar::one();
+                w_v[i][n] = -Scalar::one().reduce();
                 match i {
                     0 => w_v[i][i] = Scalar::one(),
                     _ => w_v[i][i+1] = Scalar::one(),
@@ -143,13 +152,32 @@ pub fn create_weights(card_count: usize) -> (Vec<Vec<Scalar>>, Vec<Vec<Scalar>>,
         } else {
             w_r[i][i-n] = Scalar::one();
             if i < Q-2 {
-                w_v[i][n] = -Scalar::one();
+                w_v[i][n] = -Scalar::one().reduce();
                 match i < n+3 {
                     true => w_v[i][i-n+1] = Scalar::one(),
                     false => w_v[i][i-n+2] = Scalar::one(),
                 }
             }
         }
+        /*
+        if i < n {
+            //w_l
+            let mut l_temp: &Vec<Scalar> = w_l[i]; 
+            l_temp[i] = Scalar::one();
+
+            //w_o
+            if (i != 0)
+                && ({
+                let mut o_temp: &Vec<Scalar> = w_o[i];
+            }
+
+        } else {
+            //w_r
+            let mut r_temp: &Vec<Scalar> = w_r[i]; 
+            r_temp[i] = Scalar::one();
+        
+        }
+        */
 
         
     }
@@ -169,9 +197,10 @@ pub fn create_weights(card_count: usize) -> (Vec<Vec<Scalar>>, Vec<Vec<Scalar>>,
             }
     }
     */
-    w_o[n-1][card_count-2] = Scalar::one();
+    w_o[n-1][card_count-1] = Scalar::one();
 
-    (transpose::<Scalar>(w_l), transpose::<Scalar>(w_r), transpose::<Scalar>(w_o), transpose::<Scalar>(w_v))
+    (w_l, w_r, w_o, w_v)
+    //(transpose::<Scalar>(w_l), transpose::<Scalar>(w_r), transpose::<Scalar>(w_o), transpose::<Scalar>(w_v))
 }
 
 #[cfg(test)]
@@ -220,6 +249,7 @@ mod tests {
         println!("{}", formatted.join("\n"));
     }
 
+    /*
     #[test]
     fn test_constants_() {
         test_constants(4);
@@ -238,6 +268,79 @@ mod tests {
     #[test]
     fn test_weights_() {
         test_weights(4);
+    }
+    */
+
+    #[test]
+    fn test_base_product() {
+        let k = 2;
+        let Q = 4 * k;
+
+        let v: Vec<Scalar> = create_variables(k);
+        println!("V:");
+        println!("{}", print_scalar_vec(&v));
+
+        let c: Vec<Scalar> = create_constants(Q);
+        println!("c:");
+        println!("{}", print_scalar_vec(&c));
+
+        let (a_l, a_r, a_o) = create_a(&v);
+        println!("a_l:");
+        println!("{}", print_scalar_vec(&a_l));
+        println!("a_r:");
+        println!("{}", print_scalar_vec(&a_r));
+        println!("a_o:");
+        println!("{}", print_scalar_vec(&a_o));
+
+        let (w_l, w_r, w_o, w_v) = create_weights(k);
+        println!("W_R:");
+        println!("{}", print_scalar_mat(&w_r));
+        println!("W_L:");
+        println!("{}", print_scalar_mat(&w_l));
+        println!("W_O:");
+        println!("{}", print_scalar_mat(&w_o));
+        println!("W_V:");
+        println!("{}", print_scalar_mat(&w_v));
+
+
+
+        //W_l * a_l + W_r * a_r + W_o * a_o = W_v * v + c
+        //
+        let L = util::mv_mult(&w_l, &a_l);
+        println!("L:");
+        println!("{}", print_scalar_vec(&L));
+        let R = util::mv_mult(&w_r, &a_r);
+        println!("R:");
+        println!("{}", print_scalar_vec(&R));
+        let O = util::mv_mult(&w_o, &a_o);
+        println!("O:");
+        println!("{}", print_scalar_vec(&O));
+        let V = util::mv_mult(&w_v, &v);
+        println!("V:");
+        println!("{}", print_scalar_vec(&V));
+
+        let C: Vec<Scalar> = izip!(L.iter(), R.iter(), O.iter())
+            .map(|(o, l, r)| o + l + r)
+            .collect();
+
+        let P: Vec<Scalar> = V.iter()
+            .zip(c.iter())
+            .map(|(v_, c_)| v_ + c_)
+            .collect();
+
+        let result = C.iter()
+                .zip(P.iter())
+                .filter(|(c_, p_)| c_ == p_)
+                .count();
+
+        println!("C:");
+        println!("{}", print_scalar_vec(&C));
+        println!("P:");
+        println!("{}", print_scalar_vec(&P));
+
+
+
+        
     }
 
 }

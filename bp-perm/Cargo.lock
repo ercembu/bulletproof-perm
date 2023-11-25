@@ -36,6 +36,7 @@ dependencies = [
  "bytevec",
  "curve25519-dalek-ng",
  "ethnum",
+ "itertools",
  "merlin",
  "rand",
  "sha3",
@@ -158,6 +159,15 @@ dependencies = [
  "cfg-if",
  "libc",
  "wasi",
+]
+
+[[package]]
+name = "itertools"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25db6b064527c5d482d0423354fcd07a89a2dfe07b67892e62411946db7f07b0"
+dependencies = [
+ "either",
 ]
 
 [[package]]

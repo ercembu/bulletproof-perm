@@ -101,12 +101,21 @@ pub fn give_n(n: i64) -> Scalar {
 
     zero
 }
+
+pub fn format_scalar(s: &Scalar) -> String {
+    I256::from_le_bytes(*s.reduce().as_bytes()).to_string()    
+}
+
 pub fn print_scalar_vec(v: &Vec<Scalar>) -> String {
     let mut result: String = String::from("[");
     for scalar in v {
-        let mut sc_str = I256::from_le_bytes(*scalar.as_bytes()).to_string();
-        if sc_str.len() > 10 { sc_str = String::from("-1");}
-        result += &sc_str;
+        let mut str_result: String;
+        let mut sc_str = I256::from_le_bytes(*scalar.as_bytes());
+        if sc_str.to_string().len() > 10 { 
+            let m_one = I256::from_le_bytes((-Scalar::one().reduce()).to_bytes());
+            str_result = (sc_str - (m_one + 1)).to_string();
+        } else {str_result = sc_str.to_string();}
+        result += &str_result;
         result.push_str(", ");
     }
     result.push_str("]");

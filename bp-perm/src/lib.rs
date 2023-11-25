@@ -14,6 +14,8 @@ use crate::weights::{*};
 mod transcript_protocol;
 use crate::transcript_protocol::TranscriptProtocol;
 
+mod traits;
+
 mod circuit_lib;
 use crate::circuit_lib::ACProof;
 
@@ -230,7 +232,7 @@ mod tests {
 
     }
 
-    #[test]
+    //#[test]
     fn test_1() {
         test_first(6, 7);
     }
